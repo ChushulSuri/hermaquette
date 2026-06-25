@@ -50,6 +50,7 @@ services:
     volumes:
       - sqlite_data:/data
       - artifacts:/artifacts
+      - ./hermes:/hermes   # bind-mount so DFM lessons written to MEMORY.md persist
     depends_on:
       - cad-dfm
     networks:

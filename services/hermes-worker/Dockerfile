@@ -15,6 +15,8 @@ RUN npm ci --omit=dev
 COPY services/hermes-worker/ .
 COPY packages/ /packages/
 COPY db/ /db/
+# Copy hermes skills + initial MEMORY.md (hermes/ is also bind-mounted at runtime for lesson persistence)
+COPY hermes/ /hermes/
 
 EXPOSE 3001
 
