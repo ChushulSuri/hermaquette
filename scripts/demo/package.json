@@ -1,0 +1,20 @@
+{
+  "name": "@hermaquette/demo-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dry-run": "node dry_run.js",
+    "dry-run:all": "node dry_run.js --all",
+    "dry-run:generic": "node dry_run.js --generic",
+    "dry-run:cold": "HAPPY_PATH=off node dry_run.js --all",
+    "clear-cache": "node -e \"import('./cache.js').then(m => m.clearCache())\"",
+    "metrics": "node -e \"import('./learning_metric.js').then(m => m.printLearningMetrics(process.env.SQLITE_PATH))\"",
+    "happy-on": "HAPPY_PATH=on node dry_run.js",
+    "happy-off": "HAPPY_PATH=off node dry_run.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "dotenv": "^16.4.5"
+  }
+}
