@@ -1,0 +1,3 @@
+[submodule "hermes-runtime"]
+	path = hermes-runtime
+	url = https://github.com/NousResearch/hermes-agent

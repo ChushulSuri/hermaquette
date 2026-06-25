@@ -47,6 +47,11 @@ services:
       - ARTIFACTS_DIR=/artifacts
       - DEMO_TOKEN=${DEMO_TOKEN}
       - HAPPY_PATH=${HAPPY_PATH:-off}
+      # Hermes gateway (started by start.sh inside this container)
+      - HERMES_API_KEY=${HERMES_API_KEY:-hermaquette-dev}
+      - HERMES_LLM_PROVIDER=${HERMES_LLM_PROVIDER:-openai}
+      - HERMES_LLM_MODEL=${HERMES_LLM_MODEL:-gpt-4o}
+      - HERMES_GATEWAY_URL=http://127.0.0.1:8642/v1
     volumes:
       - sqlite_data:/data
       - artifacts:/artifacts
