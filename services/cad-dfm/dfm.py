@@ -110,13 +110,20 @@ def run_dfm(stl_path: str, params: dict) -> dict:
                     "fixable": True,
                 })
 
-            # Volume check
-            volume = float(mesh.volume) if mesh.is_watertight else 0
+            # Volume check — negative volume = inside-out normals (fixable), not truly zero
+            raw_volume = float(mesh.volume) if mesh.is_watertight else 0
+            volume = abs(raw_volume)
             mesh_checks["volume_mm3"] = round(volume, 2)
-            if volume < PA12_CONSTANTS["min_volume_mm3"] and mesh.is_watertight:
+            if raw_volume < 0 and mesh.is_watertight:
+                warnings.append({
+                    "type": "inverted_normals",
+                    "description": "Mesh normals appear inverted (negative volume) — fixable with face flip",
+                    "fixable": True,
+                })
+            elif volume < PA12_CONSTANTS["min_volume_mm3"] and mesh.is_watertight:
                 failures.append({
                     "type": "zero_volume",
-                    "description": "Mesh has zero or negative volume",
+                    "description": "Mesh has effectively zero volume",
                     "fixable": False,
                 })
 
