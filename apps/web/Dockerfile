@@ -5,7 +5,7 @@ WORKDIR /app
 # Required for better-sqlite3 native module compilation
 RUN apk add --no-cache python3 make g++ sqlite-dev
 
-COPY package*.json ./
+COPY apps/web/package*.json ./
 RUN npm ci
 
 # ── Stage 2: Build ────────────────────────────────────────────────────────────
@@ -15,12 +15,9 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ sqlite-dev
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# Copy the schema so the standalone bundle can find it at runtime
-# (apps/web is built from ./apps/web context, so ../../db won't exist here)
-# We embed it as a static asset instead — see lib/db.ts for path resolution
-RUN mkdir -p public/schema && cp -r . /tmp/web-src || true
+COPY apps/web/ .
+# Copy db schema so lib/db.ts can apply it at runtime
+COPY db/ /db/
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production

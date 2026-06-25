@@ -34,6 +34,7 @@ export function getDb(): Database.Database {
   const schemaCandidates = [
     schemaPath,
     path.join(process.cwd(), 'db', 'schema.sql'),
+    '/db/schema.sql',           // Docker: COPY db/ /db/
     '/app/db/schema.sql',
     path.join(__dirname, '..', '..', '..', 'db', 'schema.sql'),
   ]

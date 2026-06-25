@@ -3,8 +3,8 @@ version: '3.9'
 services:
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -29,8 +29,8 @@ services:
 
   hermes-worker:
     build:
-      context: ./services/hermes-worker
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/hermes-worker/Dockerfile
     environment:
       - SQLITE_PATH=/data/hermaquette.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}

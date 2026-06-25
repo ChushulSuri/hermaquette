@@ -7,10 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
+# Copy worker package.json first for layer caching
+COPY services/hermes-worker/package*.json ./
 RUN npm ci --omit=dev
 
-COPY . .
+# Copy worker source and shared packages
+COPY services/hermes-worker/ .
+COPY packages/ /packages/
+COPY db/ /db/
 
 EXPOSE 3001
 
