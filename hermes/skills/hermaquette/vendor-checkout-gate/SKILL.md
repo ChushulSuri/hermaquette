@@ -1,0 +1,75 @@
+# Skill: vendor-checkout-gate
+
+**Stage**: `checkout_gate`
+**Service**: hermes-worker
+**Handler**: `services/hermes-worker/skills/vendor-checkout-gate.js`
+**Exports**: `approveVendorCheckout(db, orderId)` — called by web API
+
+## Description
+
+Governance gate before any real vendor spend. Evaluates the vendor cost against the
+configured spend cap, creates a `vendor_order` record, and either blocks or requests
+human approval via the UI.
+
+**Stripe Issuing integration** (optional): when `STRIPE_ISSUING_ENABLED=true`, the
+`approveVendorCheckout()` function issues a test-mode virtual card scoped to shipping
+merchants with a per-authorization cap. The card is NEVER automatically charged or submitted
+to the vendor — that requires a separate explicit step.
+
+## Trigger
+
+A `jobs` row with `stage='checkout_gate'` and `status='queued'`, created by ledger-payment.
+
+## Input (job.payload)
+
+```json
+{}
+```
+All data is read from the `ledger` row.
+
+## Output (job.result)
+
+```json
+{
+  "status": "blocked | pending_approval",
+  "vendor_order_id": "nano-id",
+  "reason": "over_spend_cap"
+}
+```
+
+## Approval flow
+
+```
+checkout_gate job runs
+  → status=pending_approval
+  → order.state = 'checkout_pending_approval'
+  → events: awaiting_approval
+
+Human reviews in UI → calls POST /orders/:id/approve
+  → web API calls approveVendorCheckout(db, orderId)
+  → optionally issues Stripe Issuing virtual card
+  → vendor_order.status = 'approved'
+  → order.state = 'checkout_approved'
+  → events: approved
+```
+
+## Environment variables
+
+| var                      | default  | purpose                                    |
+|--------------------------|----------|--------------------------------------------|
+| `SPEND_CAP_CENTS`        | `5000`   | Hard cap; above this always blocks         |
+| `STRIPE_ISSUING_ENABLED` | `false`  | Set `true` to issue virtual cards          |
+| `STRIPE_SECRET_KEY`      | —        | Stripe test key for Issuing API            |
+
+## Events emitted
+
+| event               | when                             |
+|---------------------|----------------------------------|
+| `progress`          | start of gate evaluation         |
+| `blocked`           | cost > spend cap                 |
+| `awaiting_approval` | within cap, needs human sign-off |
+| `approved`          | `approveVendorCheckout()` called |
+
+## Memory / learning hooks
+
+None. Gate is policy-driven, not learned.
