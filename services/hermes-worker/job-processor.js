@@ -5,7 +5,7 @@ import { buildGeometry } from './skills/build-geometry.js'
 import { dfmGate } from './skills/dfm-gate.js'
 import { vendorQuote } from './skills/vendor-quote.js'
 import { ledgerPayment } from './skills/ledger-payment.js'
-import { vendorCheckoutGate } from './skills/vendor-checkout-gate.js'
+import { vendorCheckoutGate, approveVendorCheckout } from './skills/vendor-checkout-gate.js'
 
 const STAGE_HANDLERS = {
   research: intakeResearch,
@@ -15,6 +15,8 @@ const STAGE_HANDLERS = {
   quote: vendorQuote,
   payment: ledgerPayment,
   checkout_gate: vendorCheckoutGate,
+  // Human approval triggers this stage — issues Issuing card or SQLite record
+  checkout_approve: async (db, orderId, payload) => approveVendorCheckout(db, orderId),
 }
 
 // ── Main dispatcher ──────────────────────────────────────────────────────────
