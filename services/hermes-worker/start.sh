@@ -4,7 +4,9 @@ set -e
 echo "[start] Configuring Hermes..."
 mkdir -p /root/.hermes/skills
 
-# Write config.yaml — provider and model from env
+# Write config.yaml — provider and model from env.
+# Primary LLM: ChatGPT OAuth (configured via HERMES_AUTH_JSON).
+# Falls back to openai API key if auth.json is absent.
 cat > /root/.hermes/config.yaml <<EOF
 model:
   provider: ${HERMES_LLM_PROVIDER:-openai}
@@ -24,10 +26,18 @@ display:
   streaming: false
 EOF
 
-# Write API keys to Hermes .env
-cat > /root/.hermes/.env <<EOF
+# ChatGPT OAuth credentials: pass HERMES_AUTH_JSON as env var.
+# Obtain by running `hermes setup --portal` locally and copying ~/.hermes/auth.json.
+if [ -n "${HERMES_AUTH_JSON}" ]; then
+  echo "${HERMES_AUTH_JSON}" > /root/.hermes/auth.json
+  echo "[start] ChatGPT OAuth credentials written to auth.json"
+else
+  echo "[start] HERMES_AUTH_JSON not set — Hermes will use direct API key if configured"
+  # Write OPENAI_API_KEY as fallback (only used if no auth.json)
+  cat > /root/.hermes/.env <<HERMESENV
 OPENAI_API_KEY=${OPENAI_API_KEY:-}
-EOF
+HERMESENV
+fi
 
 # Link hermaquette skills into Hermes skills directory
 if [ -d /hermes/skills/hermaquette ]; then

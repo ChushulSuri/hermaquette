@@ -14,11 +14,17 @@ export function ConceptGallery({ orderId, images }: ConceptGalleryProps) {
 
   async function handleApprove() {
     if (!selected) return
+    const selectedImage = images.find(img => img.id === selected)
+    if (!selectedImage) return
     setApproving(true)
     const res = await fetch(`/api/orders/${orderId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'approve_concept', image_id: selected }),
+      body: JSON.stringify({
+        action: 'approve_concept',
+        image_id: selected,
+        image_url: selectedImage.url,
+      }),
     })
     if (res.ok) {
       router.refresh()

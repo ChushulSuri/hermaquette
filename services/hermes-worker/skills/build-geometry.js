@@ -10,8 +10,21 @@
  * On success: updates spec with STL/GLB paths, enqueues DFM gate.
  */
 import { nanoid } from 'nanoid'
+import { readFileSync } from 'fs'
 import fetch from 'node-fetch'
 import { emitEvent } from '../job-processor.js'
+
+// Read MEMORY.md and return true if a prior DFM run recorded a thin-text lesson.
+// This is the honest KTD11 learning loop: the second object pre-thickens because
+// Hermes *learned* from the first run, not because of a hardcoded env flag.
+function hasLearnedThinTextLesson() {
+  try {
+    const memory = readFileSync('/hermes/MEMORY.md', 'utf-8')
+    return /pre-thicken|text_depth.*>=?\s*0\.6|thin.*(text|feature)/i.test(memory)
+  } catch {
+    return false
+  }
+}
 
 const CAD_DFM_URL = process.env.CAD_DFM_URL || 'http://cad-dfm:8000'
 const TIMEOUT_MS = parseInt(process.env.GEOMETRY_TIMEOUT_MS || '600000')
@@ -30,6 +43,17 @@ export async function buildGeometry(db, orderId, payload) {
 
   const material = spec?.material || order.material || 'pa12'
   const happyPath = process.env.HAPPY_PATH === 'on'
+  // B2: check MEMORY.md first — if Hermes logged a thin-text lesson from a prior run,
+  // pre-thicken so this object passes DFM first-try (the honest cross-object learning beat).
+  const learnedPreThicken = !happyPath && hasLearnedThinTextLesson()
+  const useThickText = happyPath || learnedPreThicken
+
+  if (learnedPreThicken) {
+    emitEvent(db, orderId, 'geometry', 'progress',
+      'Hermes applied a lesson from memory: pre-thickening text features to pass DFM first-try', {
+        learned: true, lesson_source: 'MEMORY.md',
+      })
+  }
 
   const geomPayload = {
     order_id: orderId,
@@ -39,9 +63,10 @@ export async function buildGeometry(db, orderId, payload) {
       happy_path: happyPath,
       base_thickness_mm: 3.0,
       relief_depth_mm: 1.5,
-      // text_depth deliberately thin to trigger DFM fail in demo mode
-      text_depth_mm: happyPath ? 0.6 : 0.3,
-      engrave_depth_mm: happyPath ? 0.6 : 0.5,
+      // text_depth: thin (0.3mm) triggers DFM fail on first run; learned pre-thicken
+      // or HAPPY_PATH=on uses 0.6mm to pass first-try on subsequent objects.
+      text_depth_mm: useThickText ? 0.6 : 0.3,
+      engrave_depth_mm: useThickText ? 0.6 : 0.5,
       plaque_width_mm: 100,
       plaque_height_mm: 80,
     },

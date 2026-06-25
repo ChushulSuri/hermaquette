@@ -15,6 +15,7 @@ services:
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
       - DEMO_TOKEN=${DEMO_TOKEN}
+      - DEMO_ALLOW_PENDING_QUOTE=${DEMO_ALLOW_PENDING_QUOTE:-false}
     volumes:
       - sqlite_data:/data
       - artifacts:/artifacts
@@ -52,6 +53,10 @@ services:
       - HERMES_LLM_PROVIDER=${HERMES_LLM_PROVIDER:-openai}
       - HERMES_LLM_MODEL=${HERMES_LLM_MODEL:-gpt-4o}
       - HERMES_GATEWAY_URL=http://127.0.0.1:8642/v1
+      # ChatGPT OAuth: copy contents of ~/.hermes/auth.json after `hermes setup --portal`
+      - HERMES_AUTH_JSON=${HERMES_AUTH_JSON:-}
+      # DEMO flags
+      - DEMO_ALLOW_PENDING_QUOTE=${DEMO_ALLOW_PENDING_QUOTE:-false}
     volumes:
       - sqlite_data:/data
       - artifacts:/artifacts
@@ -71,8 +76,7 @@ services:
     build:
       context: ./services/cad-dfm
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    # port 8000 intentionally not published to host — internal to hermaquette_net only
     volumes:
       - artifacts:/artifacts
     networks:

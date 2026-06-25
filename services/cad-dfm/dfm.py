@@ -245,5 +245,6 @@ if __name__ == "__main__":
     result = run_dfm(args.stl, params)
     print(json.dumps(result))
 
-    # Exit code signals overall status to the caller
-    sys.exit(0 if result["status"] in ("PASS", "FIXABLE") else 1)
+    # Always exit 0 — BLOCKED/NEEDS_REVIEW are valid DFM results, not Python errors.
+    # Non-zero exit causes server.py to raise HTTP 500, swallowing the structured result.
+    sys.exit(0)
