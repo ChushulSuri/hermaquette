@@ -1,0 +1,98 @@
+version: '3.9'
+
+services:
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - SQLITE_PATH=/data/hermaquette.db
+      - NODE_ENV=production
+      - NEXT_PUBLIC_DEMO_TOKEN=${DEMO_TOKEN}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+      - DEMO_TOKEN=${DEMO_TOKEN}
+    volumes:
+      - sqlite_data:/data
+      - artifacts:/artifacts
+    networks:
+      - hermaquette_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  hermes-worker:
+    build:
+      context: ./services/hermes-worker
+      dockerfile: Dockerfile
+    environment:
+      - SQLITE_PATH=/data/hermaquette.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NEMOTRON_API_KEY=${NEMOTRON_API_KEY}
+      - NEMOTRON_BASE_URL=${NEMOTRON_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_ISSUING_ENABLED=${STRIPE_ISSUING_ENABLED:-false}
+      - NANOBANANA_API_KEY=${NANOBANANA_API_KEY}
+      - SCULPTEO_API_KEY=${SCULPTEO_API_KEY}
+      - SCULPTEO_API_URL=${SCULPTEO_API_URL:-https://www.sculpteo.com/api}
+      - AGENTMAIL_API_KEY=${AGENTMAIL_API_KEY}
+      - CAD_DFM_URL=http://cad-dfm:8000
+      - ARTIFACTS_DIR=/artifacts
+      - DEMO_TOKEN=${DEMO_TOKEN}
+      - HAPPY_PATH=${HAPPY_PATH:-off}
+    volumes:
+      - sqlite_data:/data
+      - artifacts:/artifacts
+    depends_on:
+      - cad-dfm
+    networks:
+      - hermaquette_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  cad-dfm:
+    build:
+      context: ./services/cad-dfm
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - artifacts:/artifacts
+    networks:
+      - hermaquette_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - hermaquette_net
+    restart: unless-stopped
+    depends_on:
+      - web
+
+volumes:
+  sqlite_data:
+  artifacts:
+
+networks:
+  hermaquette_net:
+    driver: bridge
