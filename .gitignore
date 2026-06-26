@@ -34,6 +34,7 @@ pip-log.txt
 # Artifacts (cached demo artifacts should be in a separate volume, not committed)
 artifacts/
 scripts/demo/cache/
+fixtures/*_repaired.stl
 # Do NOT ignore the artifacts API route
 !apps/web/app/api/artifacts/
 
