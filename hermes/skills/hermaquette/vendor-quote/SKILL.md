@@ -65,6 +65,16 @@ quote({ stl_path: string, material: string, qty: number })
   → Promise<{ vendor_cost_cents: number, lead_time_days: number, currency: string, quote_source: string }>
 ```
 
+## Invocation
+
+```
+node /hermes/skills/hermaquette/vendor-quote/scripts/run.js <orderId>
+```
+
+Input: orderId (string)
+Output (stdout JSON): `{ status, ledger_id, vendor_cost_cents, service_fee_cents, revenue_cents, lead_time_days, quote_source }`
+Exit: 0 on success, 1 on failure (printability failed, dfm_status not PASS, no ledger written)
+
 ## Memory / learning hooks
 
 None on this stage.

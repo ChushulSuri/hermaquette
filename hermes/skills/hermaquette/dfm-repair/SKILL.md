@@ -76,7 +76,17 @@ geometry reasoning or suggest mesh edits. The repair macro is deterministic.
 | `repair_applied` | dfm | Repairs applied, mesh is printable |
 | `repair_blocked` | dfm | Mesh cannot be repaired |
 
+## Invocation
+
+```
+node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js <orderId> <stl_url> [attempt] [parentRunId]
+```
+
+Input: orderId (string), stl_url (string), attempt (int, default 1), parentRunId (optional — from HERMES_RUN_ID env or argv[5])
+Output (stdout JSON): `{ status, reason, applied_repairs, mesh_checks, repaired_stl_path, geometry_hash, attempt, dfm_explanation }`
+Exit: 0 on PASS or FIXABLE, 1 on BLOCKED or fatal error
+
 ## Error handling
 
-- CAD-DFM service unreachable → return `{ status: "BLOCKED", reason: "DFM service unavailable" }`
-- STL download fails → return `{ status: "BLOCKED", reason: "Cannot fetch mesh" }`
+- CAD-DFM service unreachable → emit `dfm_blocked`, upsert spec `dfm_status=BLOCKED`, exit 1
+- STL download fails → emit `dfm_blocked`, upsert spec `dfm_status=BLOCKED`, exit 1
