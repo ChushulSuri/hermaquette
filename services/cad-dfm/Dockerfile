@@ -17,6 +17,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-warm Depth-Anything-V2-Small weights so the first /geometry call is fast.
+# Falls back gracefully to luminance depth if the download fails during build.
+RUN python -c "\
+from transformers import pipeline; \
+p = pipeline('depth-estimation', model='depth-anything/Depth-Anything-V2-Small-hf'); \
+print('DA-V2 weights cached')" \
+    || echo "[Dockerfile] DA-V2 pre-warm failed — will download on first request"
+
 # Bundle a free font for engraving text
 RUN mkdir -p /fonts && \
     python -c "

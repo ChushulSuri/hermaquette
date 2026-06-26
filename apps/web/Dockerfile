@@ -27,6 +27,13 @@ ENV NODE_ENV=production
 ARG NEXT_PUBLIC_DEMO_TOKEN
 ENV NEXT_PUBLIC_DEMO_TOKEN=${NEXT_PUBLIC_DEMO_TOKEN}
 
+# Download model-viewer into public/ so it's served locally at runtime
+# (avoids a live googleapis CDN dep during the demo recording).
+RUN mkdir -p public && \
+    wget -q -O public/model-viewer.min.js \
+      https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js \
+    || echo "model-viewer download failed — component will fall back to CDN"
+
 RUN npm run build
 
 # ── Stage 3: Runner ───────────────────────────────────────────────────────────

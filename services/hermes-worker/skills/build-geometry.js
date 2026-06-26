@@ -74,8 +74,16 @@ export async function buildGeometry(db, orderId, payload) {
       // dfm.py:76 triggers the engrave_too_shallow check and the re-built STL genuinely differs.
       engrave_depth_mm: useThickText ? 0.6 : 0.3,
       plaque_text: order.description.split(' ').slice(0, 3).join(' ').toUpperCase().slice(0, 14),
-      plaque_width_mm: 100,
-      plaque_height_mm: 80,
+      // Parse dimensions from description ("60mm × 30mm") so name-tags get correct size.
+      // Falls back to hero plaque default (100×80) when not specified.
+      plaque_width_mm: (() => {
+        const m = order.description.match(/(\d+)\s*mm\s*[×x]\s*\d+\s*mm/i)
+        return m ? Math.min(200, Math.max(30, parseInt(m[1], 10))) : 100
+      })(),
+      plaque_height_mm: (() => {
+        const m = order.description.match(/\d+\s*mm\s*[×x]\s*(\d+)\s*mm/i)
+        return m ? Math.min(200, Math.max(20, parseInt(m[1], 10))) : 80
+      })(),
     },
   }
 

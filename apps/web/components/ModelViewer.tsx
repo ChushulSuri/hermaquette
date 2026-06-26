@@ -36,7 +36,14 @@ export function ModelViewer({ glbUrl, alt = '3D model preview', className = '' }
 
     const script = document.createElement('script')
     script.type = 'module'
-    script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js'
+    // Prefer the local copy baked into public/ by the Dockerfile; fall back to CDN.
+    script.src = '/model-viewer.min.js'
+    script.onerror = () => {
+      const fallback = document.createElement('script')
+      fallback.type = 'module'
+      fallback.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js'
+      document.head.appendChild(fallback)
+    }
     document.head.appendChild(script)
   }, [])
 

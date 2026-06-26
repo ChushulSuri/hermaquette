@@ -5,8 +5,7 @@
   "type": "module",
   "main": "./adapter.js",
   "exports": {
-    ".": "./adapter.js",
-    "./spend": "./spend_adapter.js"
+    ".": "./adapter.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2",

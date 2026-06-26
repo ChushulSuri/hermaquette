@@ -17,7 +17,7 @@ services:
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
       - DEMO_TOKEN=${DEMO_TOKEN}
-      - DEMO_ALLOW_PENDING_QUOTE=${DEMO_ALLOW_PENDING_QUOTE:-false}
+      - DEMO_ALLOW_PENDING_QUOTE=${DEMO_ALLOW_PENDING_QUOTE:-true}
     volumes:
       - sqlite_data:/data
       - artifacts:/artifacts
@@ -38,8 +38,8 @@ services:
       - SQLITE_PATH=/data/hermaquette.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - NEMOTRON_API_KEY=${NEMOTRON_API_KEY}
+      - NEMOTRON_MODEL=${NEMOTRON_MODEL:-nvidia/llama-3.1-nemotron-70b-instruct}
       - NEMOTRON_BASE_URL=${NEMOTRON_BASE_URL:-https://integrate.api.nvidia.com/v1}
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_ISSUING_ENABLED=${STRIPE_ISSUING_ENABLED:-false}
       - NANOBANANA_API_KEY=${NANOBANANA_API_KEY}
@@ -50,15 +50,19 @@ services:
       - ARTIFACTS_DIR=/artifacts
       - DEMO_TOKEN=${DEMO_TOKEN}
       - HAPPY_PATH=${HAPPY_PATH:-off}
-      # Hermes gateway (started by start.sh inside this container)
+      # Hermes gateways (started by start.sh inside this container)
+      # Port 8642: primary (GPT-5.5/ChatGPT OAuth)  Port 8643: Nemotron (NVIDIA)
       - HERMES_API_KEY=${HERMES_API_KEY:-hermaquette-dev}
       - HERMES_LLM_PROVIDER=${HERMES_LLM_PROVIDER:-openai}
-      - HERMES_LLM_MODEL=${HERMES_LLM_MODEL:-gpt-4o}
+      - HERMES_LLM_MODEL=${HERMES_LLM_MODEL:-gpt-5.5}
+      - HERMES_LLM_MODEL_API_FALLBACK=${HERMES_LLM_MODEL_API_FALLBACK:-gpt-4o}
+      - HERMES_REASONING_EFFORT=${HERMES_REASONING_EFFORT:-xhigh}
       - HERMES_GATEWAY_URL=http://127.0.0.1:8642/v1
+      - HERMES_NEMOTRON_GATEWAY_URL=http://127.0.0.1:8643/v1
       # ChatGPT OAuth: copy contents of ~/.hermes/auth.json after `hermes setup --portal`
       - HERMES_AUTH_JSON=${HERMES_AUTH_JSON:-}
       # DEMO flags
-      - DEMO_ALLOW_PENDING_QUOTE=${DEMO_ALLOW_PENDING_QUOTE:-false}
+      - DEMO_ALLOW_PENDING_QUOTE=${DEMO_ALLOW_PENDING_QUOTE:-true}
     volumes:
       - sqlite_data:/data
       - artifacts:/artifacts

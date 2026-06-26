@@ -4,16 +4,16 @@ import { conceptImages } from './skills/concept-images.js'
 import { buildGeometry } from './skills/build-geometry.js'
 import { dfmGate } from './skills/dfm-gate.js'
 import { vendorQuote } from './skills/vendor-quote.js'
-import { ledgerPayment } from './skills/ledger-payment.js'
 import { vendorCheckoutGate, approveVendorCheckout } from './skills/vendor-checkout-gate.js'
 
+// Payment confirmation is handled synchronously by /api/session (web route, not a queued job).
+// Checkout gate is enqueued directly from that route after Stripe session.retrieve confirms paid.
 const STAGE_HANDLERS = {
   research: intakeResearch,
   concept: conceptImages,
   geometry: buildGeometry,
   dfm: dfmGate,
   quote: vendorQuote,
-  payment: ledgerPayment,
   checkout_gate: vendorCheckoutGate,
   // Human approval triggers this stage — issues Issuing card or SQLite record
   checkout_approve: async (db, orderId, payload) => approveVendorCheckout(db, orderId),

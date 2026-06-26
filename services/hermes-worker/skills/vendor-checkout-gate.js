@@ -104,15 +104,13 @@ export async function approveVendorCheckout(db, orderId) {
   let cardId = null
   let spendPath = 'sqlite'
 
-  // Read ledger to get the order currency (Sculpteo quotes in EUR)
-  const ledger = db.prepare('SELECT currency FROM ledger WHERE order_id = ?').get(orderId)
-  const issuingCurrency = (ledger?.currency || 'usd').toLowerCase()
-
   if (process.env.STRIPE_ISSUING_ENABLED === 'true' && process.env.STRIPE_SECRET_KEY) {
     try {
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
-      // Stripe Issuing requires a cardholder — create a minimal one per order
+      // Issuing card is always USD — the internal spend approval is in USD regardless of
+      // the customer's invoice currency (e.g. EUR from Sculpteo). A US cardholder with
+      // a non-USD card throws in test-mode, so we decouple Issuing currency from quote currency.
       const cardholder = await stripe.issuing.cardholders.create({
         name: 'Hermaquette Demo',
         email: 'demo@hermaquette.ai',
@@ -132,7 +130,7 @@ export async function approveVendorCheckout(db, orderId) {
       // Test-mode only: issue a virtual card scoped to shipping merchants
       const card = await stripe.issuing.cards.create({
         cardholder: cardholder.id,
-        currency: issuingCurrency,
+        currency: 'usd',
         type: 'virtual',
         spending_controls: {
           spending_limits: [{
