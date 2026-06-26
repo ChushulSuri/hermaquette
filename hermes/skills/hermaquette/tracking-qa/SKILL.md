@@ -1,9 +1,22 @@
+---
+name: tracking-qa
+description: Roadmap/scaffold (not yet implemented) — order tracking + GPT-vision delivery QA comparing form/shape (not color, since prints are single-color) + a drafted reprint/refund that requires human approval and is never auto-sent.
+version: 0.1.0
+author: Hermaquette
+license: MIT
+metadata:
+  hermes:
+    tags: [hermaquette, tracking, qa, vision, roadmap]
+---
+
 # Skill: tracking-qa
 
 **Stage**: `tracking_qa`
 **Service**: hermes-worker
-**Handler**: `services/hermes-worker/skills/tracking-qa.js` *(not yet implemented)*
-**Status**: Scaffold — implementation in U5
+**Handler**: `services/hermes-worker/skills/tracking-qa.js` *(not yet implemented — roadmap)*
+**Status**: Scaffold — implementation deferred (cut-first per the V2 cut ladder)
+
+> When implemented, follow the schema in `hermes/agents/followup/AGENT.md` (canonical): inputs `tracking_status`, `delivery_photo_url`; QA output `{ qa_result: "pass"|"mismatch", confidence, issues, comparison_notes }`. **Compare form/shape, NOT color** (prints are single-color; the concept image is full-color). Drafts are `pending_approval` and never auto-sent.
 
 ## Description
 
@@ -19,30 +32,20 @@ Post-delivery quality assurance. After the vendor ships the print:
 A `jobs` row with `stage='tracking_qa'` and `status='queued'`, created after vendor
 submission confirms a tracking number.
 
-## Input (job.payload)
+## Input / Output (canonical — follow `hermes/agents/followup/AGENT.md`)
+
+Tracking mode input: `{ orderId }` → returns `{ tracking_status }`. Vision-QA mode input: `{ delivery_photo_url, order spec (shape/dimensions/material), concept_image_url }` → returns:
 
 ```json
 {
-  "tracking_number": "…",
-  "tracking_url": "https://sculpteo.com/track/…",
-  "expected_dimensions_mm": {"x": 100, "y": 80, "z": 6.5}
+  "qa_result": "pass" | "mismatch",
+  "confidence": 0.0,
+  "issues": ["..."],
+  "comparison_notes": "..."
 }
 ```
 
-## Output (job.result)
-
-```json
-{
-  "delivery_confirmed": true,
-  "vision_result": {
-    "pass": true,
-    "defects": [],
-    "confidence": 0.97
-  },
-  "draft_action": "approve",
-  "draft_status": "pending_approval"
-}
-```
+Compare **form/shape, NOT color** (prints are single-color; the concept image is full-color). On `mismatch`, the Follow-up agent drafts a reprint/refund with status `pending_approval` and **never auto-sends** it.
 
 ## LLM steps
 

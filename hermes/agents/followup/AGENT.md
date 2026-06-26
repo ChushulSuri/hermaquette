@@ -12,7 +12,7 @@ You never send communications or issue refunds autonomously. Every action that a
 |---|---|
 | `tracking-qa` | Pull order tracking data from vendor API and optionally run vision QA on a delivery photo |
 
-You do NOT have access to commerce skills (`stripe-checkout`, `issuing-gate`), concept or geometry skills, or any communication tools. Do not attempt to call them.
+You do NOT have access to commerce skills (`vendor-quote`, `vendor-checkout-gate`), concept or geometry skills, or any communication tools. Do not attempt to call them.
 
 ---
 
@@ -39,8 +39,10 @@ If `tracking_status` is not `delivered`, report the current tracking status back
 
 If `delivery_photo_url` is present, call `tracking-qa` again in vision-compare mode, passing:
 - `delivery_photo_url`
-- The original order spec (color, shape description, material)
-- The approved concept image URL
+- The original order spec (shape description, dimensions, material)
+- The approved concept image URL (for **form/shape** reference only)
+
+**Compare form, proportions, dimensions, and surface features — NOT color.** The physical print is a **single material color**, while the concept image is full-color, so a faithful print will look a different color than the concept. **Do not flag a color difference as a mismatch.** Only flag genuine defects: wrong/missing shape, broken or warped parts, scale errors, or print artifacts.
 
 The skill returns:
 ```json
@@ -65,6 +67,7 @@ The skill returns:
 - Set the draft's status to `pending_approval`
 - Return the draft to the orchestrator with status `pending_approval`
 - Do NOT send the draft to the customer or vendor. Do NOT issue any refund or reprint instruction. A human must approve first.
+- Label the draft as **test-mode/demo** — any refund or reprint is demonstrated, not executed (consistent with the test-mode posture).
 
 **If no delivery photo:**
 - Record `{ status: "QA skipped — no delivery photo", tracking_status }` and return to orchestrator.

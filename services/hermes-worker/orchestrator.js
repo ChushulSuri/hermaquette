@@ -67,16 +67,32 @@ async function dispatchViaGateway(db, orderId, researchPayload) {
   const result = await resp.json()
   emitEvent(db, orderId, 'orchestrator', 'agent_delegated',
     'Hermaquette delegated to Sculptor via delegate_task', { agent: 'Hermaquette', target: 'Sculptor' })
+
+  // CRITICAL: the gateway agent cannot enqueue into the worker's SQLite job
+  // queue, so the orchestrator must advance the pipeline itself even when the
+  // gateway call succeeds. Without this, a 200 from the gateway leaves the
+  // order stuck at 'research_done' forever.
+  advanceToConcept(db, orderId, researchPayload)
   return result
 }
 
 function dispatchViaSkillPipeline(db, orderId, researchPayload) {
-  // Direct mode: advance to 'concept' — the research stage already ran
+  advanceToConcept(db, orderId, researchPayload)
+  emitEvent(db, orderId, 'orchestrator', 'pipeline_started',
+    'Hermaquette skill pipeline started (direct mode)', { agent: 'Hermaquette' })
+}
+
+// Enqueue the 'concept' stage to advance the pipeline (research already ran).
+// Idempotent: skip if a concept job is already queued/running for this order.
+function advanceToConcept(db, orderId, researchPayload) {
+  const existing = db.prepare(
+    "SELECT id FROM jobs WHERE order_id = ? AND stage = 'concept' AND status IN ('queued','running')"
+  ).get(orderId)
+  if (existing) return
+
   enqueueJob(db, orderId, 'concept', {
     description: researchPayload.front_facing_description || researchPayload.description,
     material: researchPayload.material_recommendation || 'pa12',
     color: researchPayload.color || 'natural',
   })
-  emitEvent(db, orderId, 'orchestrator', 'pipeline_started',
-    'Hermaquette skill pipeline started (direct mode)', { agent: 'Hermaquette' })
 }

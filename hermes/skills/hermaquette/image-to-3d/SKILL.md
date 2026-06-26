@@ -69,6 +69,10 @@ Sculptor agent receives approved concept image URL.
 - fal.ai 4xx → retry once after 5s, then fall back to Meshy
 - fal.ai 5xx → immediate fallback to Meshy
 
+## Runtime note
+
+- In the current JS-queue runtime this skill **auto-enqueues the `dfm-repair` stage** after generation. (Under true Hermes `delegate_task`, the Sculptor agent would instead call `dfm-repair` itself and this auto-enqueue would be removed.)
+
 ## Memory / learning
 
-- Record `geometry_hash` so DFM-repair can assert hash continuity
+- Record `geometry_hash` as **provenance** of the as-generated mesh. Do NOT assert hash equality after `dfm-repair` — the repair macro intentionally alters geometry (decimate/rescale), so the hash will not match.

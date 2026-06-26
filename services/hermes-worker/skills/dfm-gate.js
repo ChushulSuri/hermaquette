@@ -53,13 +53,13 @@ export async function dfmGate(db, orderId, payload) {
   const explanation = await chat([
     {
       role: 'system',
-      content: 'You are a manufacturing expert explaining DFM results to a customer in plain, friendly English. Be concise: 2-3 sentences max.',
+      content: 'You are a manufacturing expert explaining a DFM result to a customer in plain, friendly English. Be concise: 2-3 sentences max. EXPLAIN ONLY — do not decide, override, or reinterpret the pass/fail status (it is already decided). Cite ONLY values present in the provided result; never invent measurements or numbers. Do not suggest geometry fixes the system did not request.',
     },
     {
       role: 'user',
       content: `DFM check result: ${JSON.stringify(dfmResult)}. Explain what this means for the customer and what happens next.`,
     },
-  ], { step: 'dfm_explanation', max_tokens: 256 })
+  ], { step: 'dfm_explanation', max_tokens: 256, temperature: 0.2 })
 
   emitEvent(db, orderId, 'dfm', 'explanation',
     `Hermes (via NVIDIA Nemotron): ${explanation}`,

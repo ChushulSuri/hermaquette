@@ -14,6 +14,30 @@ import { createWriteStream, mkdirSync } from 'fs'
 import { join } from 'path'
 import { pipeline } from 'stream/promises'
 import { emitEvent, enqueueJob } from '../job-processor.js'
+import { chat } from '../llm.js'
+
+// NVIDIA Nemotron designated step: explain the deterministic DFM result in plain
+// English (explanation only — never decides pass/fail). Routed to Nemotron via
+// step:'dfm_explanation'. Failure is non-fatal; the pipeline does not depend on it.
+async function explainDfm(db, orderId, dfmResult) {
+  try {
+    const explanation = await chat([
+      {
+        role: 'system',
+        content: 'You are a manufacturing expert explaining a 3D-print DFM result to a customer in plain, friendly English. Be concise: 2-3 sentences. EXPLAIN ONLY — never decide or change the status. Cite ONLY values present in the result; never invent measurements.',
+      },
+      {
+        role: 'user',
+        content: `DFM repair result for an AI-generated figure: ${JSON.stringify(dfmResult)}. Explain what this means for the customer and what happens next.`,
+      },
+    ], { step: 'dfm_explanation', max_tokens: 256, temperature: 0.2 })
+    emitEvent(db, orderId, 'dfm', 'explanation',
+      `Hermes (via NVIDIA Nemotron): ${explanation}`,
+      { agent: 'Sculptor', explanation, status: dfmResult.status })
+  } catch (err) {
+    console.warn('[dfm-repair] Nemotron explanation unavailable:', err.message)
+  }
+}
 
 const CAD_DFM_URL = process.env.CAD_DFM_URL || 'http://localhost:8000'
 // Worker and cad-dfm both mount /artifacts — use this for staging meshes so
@@ -94,6 +118,9 @@ export async function dfmRepair(db, orderId, payload) {
   }
 
   console.log(`[dfm-repair] order=${orderId} attempt=${attempt} status=${dfmResult.status}`)
+
+  // NVIDIA Nemotron designated step — explain the (already-decided) DFM result.
+  await explainDfm(db, orderId, dfmResult)
 
   // ── PASS ────────────────────────────────────────────────────────────────────
   if (dfmResult.status === 'PASS') {

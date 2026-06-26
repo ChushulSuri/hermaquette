@@ -171,3 +171,48 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_order_id ON events(order_id);
 CREATE INDEX IF NOT EXISTS idx_events_order_id_id ON events(order_id, id);
   -- used for SSE cursor queries: WHERE order_id = ? AND id > ?
+
+-- ── orders (agentic-cutover additions) ───────────────────────────────────────
+-- Hermes run tracking and approval state for the two-run lifecycle.
+-- All additive; the jobs table is intentionally NOT dropped (rollback safety).
+-- SQLite 3.37.0+ supports ADD COLUMN IF NOT EXISTS (idempotent).
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS run_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS run1_response_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS run2_run_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_confirmed_at INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS checkout_approved INTEGER NOT NULL DEFAULT 0;
+
+-- ── delegations ──────────────────────────────────────────────────────────────
+-- Written by delegated children's own scripts — the proof-of-agency signal.
+-- The /v1/runs SSE stream drops subagent events; this is the primary observable.
+CREATE TABLE IF NOT EXISTS delegations (
+  id              TEXT PRIMARY KEY,
+  order_id        TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  parent_run_id   TEXT NOT NULL,
+  child_role      TEXT NOT NULL,
+    -- sculptor | followup
+  status          TEXT NOT NULL DEFAULT 'started',
+    -- started | completed | failed
+  started_at      INTEGER,
+  completed_at    INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_delegations_order_id ON delegations(order_id);
+CREATE INDEX IF NOT EXISTS idx_delegations_parent_run_id ON delegations(parent_run_id);
+
+-- ── reprint_refund_draft ─────────────────────────────────────────────────────
+-- Draft QA actions written by tracking-qa. No send path — never auto-sent.
+-- B5: never-auto-send is structurally enforced by the absence of any send column.
+CREATE TABLE IF NOT EXISTS reprint_refund_draft (
+  id              TEXT PRIMARY KEY,
+  order_id        TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  draft_type      TEXT NOT NULL,
+    -- reprint | refund
+  reason          TEXT,
+  comparison_notes TEXT,
+  status          TEXT NOT NULL DEFAULT 'pending_approval',
+    -- pending_approval | approved | rejected
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX IF NOT EXISTS idx_reprint_refund_draft_order_id ON reprint_refund_draft(order_id);

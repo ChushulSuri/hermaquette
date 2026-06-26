@@ -1,3 +1,16 @@
+---
+name: dfm-gate
+description: V1 RELIEF pipeline DFM gate — SUPERSEDED by `dfm-repair` for the V2 full-3D path. Validates the parametric relief mesh, explains the result via NVIDIA Nemotron, and routes PASS/FIXABLE/BLOCKED.
+version: 1.0.0
+author: Hermaquette
+license: MIT
+metadata:
+  hermes:
+    tags: [hermaquette, dfm, v1-relief, superseded]
+---
+
+> **⚠️ V1 (relief) pipeline — superseded.** The V2 full-3D path is `image-to-3d → dfm-repair`. This gate runs only on the legacy relief `geometry → dfm` stages and is not the canonical full-3D DFM step. Kept for the relief fallback only.
+
 # Skill: dfm-gate
 
 **Stage**: `dfm`

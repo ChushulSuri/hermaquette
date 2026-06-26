@@ -1,3 +1,14 @@
+---
+name: intake-research
+description: Use when a new order needs its request parsed — produces a full-3D-figure description, material, color, reference search keywords, and an IP-sensitivity flag; builds deterministic provenance + rights framing in code (the model never invents URLs).
+version: 1.0.0
+author: Hermaquette
+license: MIT
+metadata:
+  hermes:
+    tags: [hermaquette, intake, research, provenance]
+---
+
 # Skill: intake-research
 
 **Stage**: `research`

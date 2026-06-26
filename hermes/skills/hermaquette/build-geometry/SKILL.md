@@ -1,3 +1,16 @@
+---
+name: build-geometry
+description: V1 RELIEF pipeline geometry — SUPERSEDED by `image-to-3d` for the V2 full-3D path. Builds a 2.5D heightmap relief plaque (Depth-Anything → heightmap → parametric frame → union → STL/GLB).
+version: 1.0.0
+author: Hermaquette
+license: MIT
+metadata:
+  hermes:
+    tags: [hermaquette, geometry, v1-relief, superseded]
+---
+
+> **⚠️ V1 (relief) pipeline — superseded.** V2 full-3D geometry comes from `image-to-3d` (fal.ai AI image-to-3D), not this heightmap relief. Kept for the relief fallback only.
+
 # Skill: build-geometry
 
 **Stage**: `geometry`

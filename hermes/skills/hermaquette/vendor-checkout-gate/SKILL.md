@@ -1,3 +1,14 @@
+---
+name: vendor-checkout-gate
+description: Use to gate vendor spend — spend-cap check + human approval, then demonstrate (never execute) a test-mode Stripe Issuing virtual card scoped to shipping merchants; the card is never charged.
+version: 1.0.0
+author: Hermaquette
+license: MIT
+metadata:
+  hermes:
+    tags: [hermaquette, stripe, issuing, governance, spend-cap]
+---
+
 # Skill: vendor-checkout-gate
 
 **Stage**: `checkout_gate`

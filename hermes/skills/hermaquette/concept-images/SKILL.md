@@ -1,3 +1,14 @@
+---
+name: concept-images
+description: Use to generate concept images for a full-3D figure (chunky designer-toy / chibi style, front-facing, single clean subject) that feed the image-to-3D step. Not a relief/depth-map step.
+version: 1.0.0
+author: Hermaquette
+license: MIT
+metadata:
+  hermes:
+    tags: [hermaquette, concept, image-generation, full-3d]
+---
+
 # Skill: concept-images
 
 **Stage**: `concept`
@@ -6,12 +17,12 @@
 
 ## Description
 
-Generates 3-4 concept images for the relief sculpture using a tiered image-generation stack:
+Generates 3-4 concept images of a **full-3D figure** (chunky designer-toy / chibi style) using a tiered image-generation stack:
 1. **Nano Banana Pro** (primary, `NANOBANANA_API_KEY`)
 2. **OpenAI DALL-E 3** (fallback, `OPENAI_API_KEY`)
 3. Placeholder SVG (never blocks pipeline)
 
-Images are art-directed for high-contrast front-facing relief suitable for depth-map extraction.
+Images are art-directed as a **front-facing, single clean subject on a plain white background, suitable for fal.ai image-to-3D (Hunyuan3D) reconstruction** — bold shapes, clear silhouette, vibrant color. This is **not** a relief/coin/depth-map step (that was V1).
 Emits `images_ready` event; UI presents images for user selection.
 Does NOT auto-enqueue the next stage — web API does that when user picks an image.
 
@@ -43,7 +54,7 @@ A `jobs` row with `stage='concept'` and `status='queued'`, created by intake-res
 ## Steps
 
 1. Read order from `orders`
-2. Build art-direction prompt (coin relief, high contrast, depth-map suitable)
+2. Build art-direction prompt (chunky full-3D figure, front-facing single subject, plain white background, vibrant color, suitable for image-to-3D)
 3. Try Nano Banana Pro × 4 variations
 4. If < 3 images: try DALL-E 3 × 1
 5. If still 0: use placeholder SVGs × 3

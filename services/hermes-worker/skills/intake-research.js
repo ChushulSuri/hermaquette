@@ -4,7 +4,7 @@
  * Stage: research
  *
  * 1. Reads the order description
- * 2. Asks GPT (via Hermes) for a depth-friendly description, material, colour, search
+ * 2. Asks GPT (via Hermes) for a full-3D-figure description, material, colour, search
  *    keywords, and IP-sensitivity — it does NOT invent URLs
  * 3. Builds deterministic provenance (real verified URLs / Wikipedia search URLs) +
  *    deterministic rights framing, and writes a spec row with provenance JSON
@@ -65,7 +65,9 @@ Respond ONLY with valid JSON — no markdown, no commentary:
     research = {}
   }
 
-  const material = research.material_recommendation || order.material || 'pa12'
+  const VALID_MATERIALS = ['pa12', 'resin', 'tpu']
+  const rawMaterial = research.material_recommendation || order.material || 'pa12'
+  const material = VALID_MATERIALS.includes(rawMaterial) ? rawMaterial : 'pa12'
   const color = research.color || order.color || 'natural'
 
   // Rights framing is DETERMINISTIC, never LLM-decided. IP-sensitive objects
