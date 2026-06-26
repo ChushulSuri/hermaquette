@@ -5,6 +5,8 @@ import { buildGeometry } from './skills/build-geometry.js'
 import { dfmGate } from './skills/dfm-gate.js'
 import { vendorQuote } from './skills/vendor-quote.js'
 import { vendorCheckoutGate, approveVendorCheckout } from './skills/vendor-checkout-gate.js'
+import { imageTo3d } from './skills/image-to-3d.js'
+import { dfmRepair } from './skills/dfm-repair.js'
 
 // Payment confirmation is handled synchronously by /api/session (web route, not a queued job).
 // Checkout gate is enqueued directly from that route after Stripe session.retrieve confirms paid.
@@ -17,6 +19,9 @@ const STAGE_HANDLERS = {
   checkout_gate: vendorCheckoutGate,
   // Human approval triggers this stage — issues Issuing card or SQLite record
   checkout_approve: async (db, orderId, payload) => approveVendorCheckout(db, orderId),
+  // V2 Sculptor agent stages
+  'image-to-3d': imageTo3d,
+  'dfm-repair': dfmRepair,
 }
 
 // ── Main dispatcher ──────────────────────────────────────────────────────────
