@@ -81,6 +81,21 @@ Human reviews in UI → calls POST /orders/:id/approve
 | `awaiting_approval` | within cap, needs human sign-off |
 | `approved`          | `approveVendorCheckout()` called |
 
+## Invocation
+
+```
+node /hermes/skills/hermaquette/vendor-checkout-gate/scripts/run.js <orderId>
+```
+
+Input: orderId (string)
+Output (stdout JSON): `{ status, spend_path, card_id, executed, vendor_cost_cents, spend_cap_cents }` on pass; `{ status: "blocked", reason, ... }` on gate failure
+Exit: 0 on gate pass, 1 on any gate failure (no Issuing card created on exit 1)
+
+Fail-closed gate — ALL three conditions must be true to proceed:
+1. `payment_confirmed_at IS NOT NULL`
+2. `checkout_approved = 1`
+3. `vendor_cost_cents <= SPEND_CAP_CENTS`
+
 ## Memory / learning hooks
 
 None. Gate is policy-driven, not learned.

@@ -69,10 +69,16 @@ Sculptor agent receives approved concept image URL.
 - fal.ai 4xx → retry once after 5s, then fall back to Meshy
 - fal.ai 5xx → immediate fallback to Meshy
 
-## Runtime note
+## Invocation
 
-- In the current JS-queue runtime this skill **auto-enqueues the `dfm-repair` stage** after generation. (Under true Hermes `delegate_task`, the Sculptor agent would instead call `dfm-repair` itself and this auto-enqueue would be removed.)
+```
+node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js <orderId> <image_url> [parentRunId]
+```
+
+Input: orderId (string), image_url (string), parentRunId (optional — from HERMES_RUN_ID env or argv[4])
+Output (stdout JSON): `{ status, glb_url, stl_url, geometry_hash, model_used, cost_usd, provider }`
+Exit: 0 on success, 1 on budget-exhausted or fatal error
 
 ## Memory / learning
 
-- Record `geometry_hash` as **provenance** of the as-generated mesh. Do NOT assert hash equality after `dfm-repair` — the repair macro intentionally alters geometry (decimate/rescale), so the hash will not match.
+- Record `geometry_hash` as provenance of the as-generated mesh. Do NOT assert hash equality after `dfm-repair` — the repair macro intentionally alters geometry (decimate/rescale), so the hash will not match.

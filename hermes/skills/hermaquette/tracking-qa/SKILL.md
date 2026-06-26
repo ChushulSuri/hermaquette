@@ -63,6 +63,18 @@ Compare **form/shape, NOT color** (prints are single-color; the concept image is
 | `qa_result`            | vision analysis complete          |
 | `awaiting_qa_approval` | draft action needs human sign-off |
 
+## Invocation
+
+```
+node /hermes/skills/hermaquette/tracking-qa/scripts/run.js <orderId>
+```
+
+Input: orderId (string)
+Output (stdout JSON): `{ status, tracking_status, qa_result, draft_action, notes }`
+Exit: 0 on success, 1 on fatal error (order not found)
+
+B5 guarantee: no send/transmit code exists in this script — never-auto-send is structurally enforced.
+
 ## Memory / learning hooks
 
 On `request_reprint`: records defect class and dimensional variance in `hermes/MEMORY.md`

@@ -69,6 +69,16 @@ A `jobs` row with `stage='concept'` and `status='queued'`, created by intake-res
 | `progress`     | start of generation         |
 | `images_ready` | images array ready for UI   |
 
+## Invocation
+
+```
+node /hermes/skills/hermaquette/concept-images/scripts/run.js <orderId> <description>
+```
+
+Input: orderId (string), description (string — the cleaned front-facing description)
+Output (stdout JSON): `{ status, images, count }`
+Exit: 0 on success, 1 on fatal error (order not found, missing args)
+
 ## Memory / learning hooks
 
 None. Image provider selection is purely env-driven.
