@@ -11,16 +11,19 @@
  * The DFM service runs dfm.py::run_dfm_ai_mesh() which wraps mesh_repair.repair_mesh().
  */
 import { createWriteStream, mkdirSync } from 'fs'
-import { tmpdir } from 'os'
 import { join } from 'path'
 import { pipeline } from 'stream/promises'
 import { emitEvent, enqueueJob } from '../job-processor.js'
 
 const CAD_DFM_URL = process.env.CAD_DFM_URL || 'http://localhost:8000'
+// Worker and cad-dfm both mount /artifacts — use this for staging meshes so
+// the absolute path the worker sends to cad-dfm is valid inside cad-dfm too.
+// /tmp is NOT shared between containers.
+const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || '/artifacts'
 const MAX_REPAIR_ATTEMPTS = 2
 
 async function downloadMesh(url, destPath) {
-  // Support file:// URLs (repaired mesh from a prior attempt on shared FS)
+  // Support file:// URLs (repaired mesh already on the shared /artifacts volume)
   if (url.startsWith('file://')) {
     const srcPath = url.slice('file://'.length)
     const { createReadStream } = await import('fs')
@@ -59,10 +62,10 @@ export async function dfmRepair(db, orderId, payload) {
   db.prepare(`UPDATE orders SET state = 'dfm', updated_at = ? WHERE id = ?`)
     .run(Date.now(), orderId)
 
-  // ── Download mesh to temp file ───────────────────────────────────────────────
-  const tmpDir = join(tmpdir(), 'hermaquette-dfm')
-  try { mkdirSync(tmpDir, { recursive: true }) } catch {}
-  const tmpStl = join(tmpDir, `${orderId}_${attempt}_${Date.now()}.stl`)
+  // ── Download mesh to /artifacts/<orderId>/dfm/ (shared with cad-dfm) ────────
+  const dfmDir = join(ARTIFACTS_DIR, orderId, 'dfm')
+  try { mkdirSync(dfmDir, { recursive: true }) } catch {}
+  const tmpStl = join(dfmDir, `attempt_${attempt}.stl`)
 
   try {
     await downloadMesh(stl_url, tmpStl)

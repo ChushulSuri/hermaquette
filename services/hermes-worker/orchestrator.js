@@ -12,7 +12,10 @@
  */
 import { emitEvent, enqueueJob } from './job-processor.js'
 
-const HERMES_GATEWAY_URL = process.env.HERMES_GATEWAY_URL || 'http://127.0.0.1:8642'
+// Strip trailing /v1 — compose sets HERMES_GATEWAY_URL to the OpenAI-compat base,
+// but orchestrator needs the management base (e.g. /health, /api/chat)
+const HERMES_GATEWAY_URL = (process.env.HERMES_GATEWAY_URL || 'http://127.0.0.1:8642')
+  .replace(/\/v1\/?$/, '')
 const GATEWAY_TIMEOUT_MS = 3000
 
 async function isGatewayAvailable() {

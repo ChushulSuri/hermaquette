@@ -68,7 +68,7 @@ export async function vendorQuote(db, orderId, payload) {
   // Try the real adapter; fall back to a manual estimate
   let quoteResult
   try {
-    const { quote } = await import('../../packages/vendor/adapter.js')
+    const { quote } = await import('../../../packages/vendor/adapter.js')
     quoteResult = await quote({ stl_path: stlPath, material, qty: 1 })
   } catch (err) {
     console.warn('[vendor-quote] Adapter unavailable, using manual estimate:', err.message)

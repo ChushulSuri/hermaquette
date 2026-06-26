@@ -26,11 +26,11 @@ export async function conceptImages(db, orderId, payload) {
 
   const description = payload.description || order.description
 
-  // Art-direction prompt: high-contrast coin-relief style for depth-map extraction
-  const imagePrompt = `Professional coin relief sculpture, front-facing, high contrast, \
-detailed engraving style, white marble on dark background, centered composition, clean edges, \
-no occlusion: ${description}. Suitable for CNC/3D-print depth-map extraction. \
-Studio lighting, no harsh shadows, no background clutter.`
+  // Art-direction prompt: chunky full-3D figure style for fal.ai image-to-3D generation.
+  // Single clean subject, no props/background, good depth cues for 3D reconstruction.
+  const imagePrompt = `Chunky designer-toy / chibi-style 3D figure, front-facing, clean white \
+background, single subject, no props, no shadow, studio product photography: ${description}. \
+Bold shapes, clear silhouette, vibrant colors, suitable for 3D model generation.`
 
   const images = []
 

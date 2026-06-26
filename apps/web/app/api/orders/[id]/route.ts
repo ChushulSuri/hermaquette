@@ -49,13 +49,19 @@ export async function GET(
     try { spec.dfm_report = JSON.parse(spec.dfm_report) } catch { /* keep as string */ }
   }
 
-  // GLB path as relative URL for the viewer
+  // GLB path → servable URL for the viewer
+  // Local /artifacts path → proxied via /api/artifacts
+  // Remote https:// URL (fal.ai CDN) → passed through directly
   let glbUrl: string | null = null
   if (spec?.glb_path) {
-    const artifactsDir = process.env.ARTIFACTS_DIR || '/artifacts'
     const glbPath = spec.glb_path as string
-    if (glbPath.startsWith(artifactsDir)) {
-      glbUrl = `/api/artifacts${glbPath.slice(artifactsDir.length)}`
+    if (glbPath.startsWith('http://') || glbPath.startsWith('https://')) {
+      glbUrl = glbPath  // fal.ai / Meshy remote URL — pass through
+    } else {
+      const artifactsDir = process.env.ARTIFACTS_DIR || '/artifacts'
+      if (glbPath.startsWith(artifactsDir)) {
+        glbUrl = `/api/artifacts${glbPath.slice(artifactsDir.length)}`
+      }
     }
   }
 
