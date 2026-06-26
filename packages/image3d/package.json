@@ -1,0 +1,7 @@
+{
+  "name": "@hermaquette/image3d",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "adapter.js",
+  "description": "fal.ai image-to-3D adapter for Hermaquette"
+}
