@@ -12,19 +12,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY hermes-runtime/ /hermes-runtime/
 RUN pip install /hermes-runtime
 
-# Node.js worker dependencies
+# Node.js skill script dependencies (better-sqlite3, stripe, fal SDK, etc.)
 COPY services/hermes-worker/package*.json ./
 RUN npm ci --omit=dev
 
-# Worker source + shared packages
-COPY services/hermes-worker/ .
-COPY packages/ /packages/
+# start.sh (no JS worker files remain)
+COPY services/hermes-worker/start.sh .
+COPY packages/ /app/packages/
 COPY db/ /db/
 # Copy hermaquette skills + initial MEMORY.md
 # (hermes/ is also bind-mounted at runtime for lesson persistence)
 COPY hermes/ /hermes/
-COPY hermes/SOUL.md /hermes/SOUL.md
-COPY hermes/AGENTS.md /hermes/AGENTS.md
 
 # Hermes home: skills dir pre-created; config written by start.sh at runtime
 RUN mkdir -p /root/.hermes/skills
@@ -33,6 +31,7 @@ ENV TERMINAL_CWD=/app
 
 RUN chmod +x /app/start.sh
 
-EXPOSE 3001
+# Primary gateway port (PID 1 process — no Node worker port 3001)
+EXPOSE 8642
 
 CMD ["/app/start.sh"]
