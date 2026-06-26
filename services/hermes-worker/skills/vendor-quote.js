@@ -80,23 +80,22 @@ export async function vendorQuote(db, orderId, payload) {
     }
   }
 
-  // Printability check — only enforce for live vendor responses, not manual fallback
+  // Printability check — fail-closed for live vendor responses (B5 requirement)
   if (quoteResult.quote_source !== 'manual') {
     const printability = quoteResult.printability ?? quoteResult.status
     if (printability == null) {
-      // Sculpteo response didn't include a printability verdict — log and continue
+      // Absent verdict = cannot verify — fail-closed, require manual review
       emitEvent(db, orderId, 'quote', 'printability_unverified',
-        'Vendor response has no printability field — cannot verify',
+        'Vendor did not return a printability verdict — needs manual review',
         { quote_source: quoteResult.quote_source })
-      console.warn('[vendor-quote] No printability verdict in Sculpteo response — check API format')
-    } else {
-      const isPrintable = printability === 'printable' || printability === 'ok'
-      if (!isPrintable) {
-        emitEvent(db, orderId, 'quote', 'printability_failed',
-          `Sculptor mesh rejected by vendor: printability="${printability}"`,
-          { printability, quote_source: quoteResult.quote_source })
-        throw new Error(`Vendor printability check failed: ${printability}`)
-      }
+      throw new Error('Vendor printability verdict absent — cannot auto-proceed to checkout (check Sculpteo API response format)')
+    }
+    const isPrintable = printability === 'printable' || printability === 'ok'
+    if (!isPrintable) {
+      emitEvent(db, orderId, 'quote', 'printability_failed',
+        `Sculptor mesh rejected by vendor: printability="${printability}"`,
+        { printability, quote_source: quoteResult.quote_source })
+      throw new Error(`Vendor printability check failed: ${printability}`)
     }
   }
 
@@ -106,19 +105,32 @@ export async function vendorQuote(db, orderId, payload) {
   const revenueCents    = vendorCost + serviceFeeCents
   const grossMargin     = serviceFeeCents  // before Stripe processing fees
 
-  const ledgerId = nanoid()
-  db.prepare(`
-    INSERT INTO ledger (
-      id, order_id, vendor_cost_cents, service_fee_cents, revenue_cents,
-      gross_margin_pre_fees_cents, lead_time_days, currency, quote_source,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    ledgerId, orderId, vendorCost, serviceFeeCents, revenueCents,
-    grossMargin, quoteResult.lead_time_days, quoteResult.currency || 'usd',
-    quoteResult.quote_source,
-    Date.now(), Date.now(),
-  )
+  // Idempotent: check for existing ledger row before inserting (safe on old non-unique schema)
+  const existingLedger = db.prepare('SELECT id FROM ledger WHERE order_id = ?').get(orderId)
+  const ledgerId = existingLedger ? existingLedger.id : nanoid()
+  if (!existingLedger) {
+    db.prepare(`
+      INSERT INTO ledger (
+        id, order_id, vendor_cost_cents, service_fee_cents, revenue_cents,
+        gross_margin_pre_fees_cents, lead_time_days, currency, quote_source,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      ledgerId, orderId, vendorCost, serviceFeeCents, revenueCents,
+      grossMargin, quoteResult.lead_time_days, quoteResult.currency || 'usd',
+      quoteResult.quote_source,
+      Date.now(), Date.now(),
+    )
+  } else {
+    db.prepare(`
+      UPDATE ledger SET vendor_cost_cents=?, service_fee_cents=?, revenue_cents=?,
+        gross_margin_pre_fees_cents=?, lead_time_days=?, currency=?, quote_source=?,
+        updated_at=?
+      WHERE order_id=?
+    `).run(vendorCost, serviceFeeCents, revenueCents, grossMargin,
+      quoteResult.lead_time_days, quoteResult.currency || 'usd', quoteResult.quote_source,
+      Date.now(), orderId)
+  }
 
   const quoteStatus = ['live_api', 'browser'].includes(quoteResult.quote_source) ? 'accepted' : 'pending'
   db.prepare(`UPDATE spec SET quote_status = ?, updated_at = ? WHERE order_id = ?`)

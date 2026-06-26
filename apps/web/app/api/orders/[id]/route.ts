@@ -124,8 +124,11 @@ export async function POST(
       .run('concept_approved', now, id)
 
     const jobId = nanoid(21)
-    db.prepare(`INSERT INTO jobs (id, order_id, stage, status, payload, queued_at) VALUES (?, ?, 'geometry', 'queued', ?, ?)`)
+    // V2: enqueue image-to-3d (fal.ai full-color figure); V1 geometry (relief) is dead in V2
+    // image_url must be HTTP-accessible (fal.ai calls it); conceptPath is for local cad-dfm only
+    db.prepare(`INSERT INTO jobs (id, order_id, stage, status, payload, queued_at) VALUES (?, ?, 'image-to-3d', 'queued', ?, ?)`)
       .run(jobId, id, JSON.stringify({
+        image_url: body.image_url,
         approved_image_id: body.image_id,
         approved_image_path: conceptPath,
       }), now)

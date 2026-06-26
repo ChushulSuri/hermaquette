@@ -1,14 +1,20 @@
 /**
- * orchestrator.js — dispatch an order to the Hermaquette orchestrator agent
- * via the Hermes gateway HTTP API.
- * Falls back to direct job-processor if gateway unavailable.
+ * orchestrator.js — called at the END of intake-research to hand the order
+ * off to the Hermaquette orchestrator agent (or the direct skill pipeline).
+ *
+ * Gateway mode (HERMES_GATEWAY_URL reachable): POST to Hermes gateway, which
+ * runs the real Hermaquette orchestrator agent; that agent uses delegate_task
+ * to reach the Sculptor and Follow-up agents.
+ *
+ * Direct mode (fallback): enqueue the 'concept' job so the JS skill pipeline
+ * continues (concept → image-to-3d → dfm-repair → quote → …).
+ * Does NOT re-enqueue 'research' — that would cause an infinite loop.
  */
 import { emitEvent, enqueueJob } from './job-processor.js'
 
-const HERMES_GATEWAY_URL = process.env.HERMES_GATEWAY_URL || 'http://localhost:8642'
-const GATEWAY_TIMEOUT_MS = 5000
+const HERMES_GATEWAY_URL = process.env.HERMES_GATEWAY_URL || 'http://127.0.0.1:8642'
+const GATEWAY_TIMEOUT_MS = 3000
 
-// Check if Hermes gateway is reachable
 async function isGatewayAvailable() {
   try {
     const resp = await fetch(`${HERMES_GATEWAY_URL}/health`, {
@@ -20,23 +26,23 @@ async function isGatewayAvailable() {
   }
 }
 
-// Dispatch an order to the Hermaquette orchestrator agent
-export async function dispatchToOrchestrator(db, orderId, payload) {
-  // Try Hermes gateway first
+/**
+ * Hand off this order to the Hermaquette orchestrator agent (or skill pipeline).
+ * Call this at the end of intake-research, passing the research result as context.
+ */
+export async function dispatchToOrchestrator(db, orderId, researchPayload) {
   if (await isGatewayAvailable()) {
-    return dispatchViaGateway(db, orderId, payload)
+    return dispatchViaGateway(db, orderId, researchPayload)
   }
-  // Fall back to job-processor stage machine
-  console.log('[orchestrator] Hermes gateway unavailable, falling back to job-processor')
-  return dispatchViaJobQueue(db, orderId, payload)
+  console.log('[orchestrator] Hermes gateway not reachable — direct skill pipeline')
+  return dispatchViaSkillPipeline(db, orderId, researchPayload)
 }
 
-async function dispatchViaGateway(db, orderId, payload) {
-  emitEvent(db, orderId, 'orchestrator', 'started',
-    'Hermaquette is understanding your request', { agent: 'Hermaquette' })
+async function dispatchViaGateway(db, orderId, researchPayload) {
+  emitEvent(db, orderId, 'orchestrator', 'delegated',
+    'Hermaquette orchestrator is taking over the order', { agent: 'Hermaquette' })
 
-  // POST to Hermes gateway to start an agent session
-  const message = `Order ${orderId}: ${JSON.stringify(payload)}`
+  const message = `New order ${orderId} — research complete. Description: ${researchPayload.front_facing_description || ''}`
 
   const resp = await fetch(`${HERMES_GATEWAY_URL}/api/chat`, {
     method: 'POST',
@@ -44,23 +50,30 @@ async function dispatchViaGateway(db, orderId, payload) {
     body: JSON.stringify({
       message,
       agent: 'hermaquette-orchestrator',
-      context: { orderId, ...payload }
-    })
+      context: { orderId, ...researchPayload }
+    }),
+    signal: AbortSignal.timeout(10_000),
   })
 
   if (!resp.ok) {
-    throw new Error(`Hermes gateway error: ${resp.status}`)
+    // Gateway responded but errored — fall back to direct pipeline
+    console.warn(`[orchestrator] Gateway error ${resp.status} — falling back to direct pipeline`)
+    return dispatchViaSkillPipeline(db, orderId, researchPayload)
   }
 
   const result = await resp.json()
-
-  emitEvent(db, orderId, 'orchestrator', 'delegated',
-    'Hermaquette delegated to Sculptor', { agent: 'Hermaquette', target: 'Sculptor' })
-
+  emitEvent(db, orderId, 'orchestrator', 'agent_delegated',
+    'Hermaquette delegated to Sculptor via delegate_task', { agent: 'Hermaquette', target: 'Sculptor' })
   return result
 }
 
-async function dispatchViaJobQueue(db, orderId, payload) {
-  // Fall back to V1 job queue
-  enqueueJob(db, orderId, 'research', payload)
+function dispatchViaSkillPipeline(db, orderId, researchPayload) {
+  // Direct mode: advance to 'concept' — the research stage already ran
+  enqueueJob(db, orderId, 'concept', {
+    description: researchPayload.front_facing_description || researchPayload.description,
+    material: researchPayload.material_recommendation || 'pa12',
+    color: researchPayload.color || 'natural',
+  })
+  emitEvent(db, orderId, 'orchestrator', 'pipeline_started',
+    'Hermaquette skill pipeline started (direct mode)', { agent: 'Hermaquette' })
 }

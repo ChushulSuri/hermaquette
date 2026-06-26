@@ -106,14 +106,15 @@ export async function dfmRepair(db, orderId, payload) {
     db.prepare(`UPDATE orders SET state = 'manufacturable', updated_at = ? WHERE id = ?`)
       .run(Date.now(), orderId)
 
-    // Update spec dfm_status
-    db.prepare(`UPDATE spec SET dfm_status = 'PASS', dfm_report = ?, updated_at = ? WHERE order_id = ?`)
-      .run(JSON.stringify(dfmResult), Date.now(), orderId)
+    // Persist repaired STL path + DFM report so viewer and quote use the same mesh
+    const repairedStlUrl = dfmResult.repaired_stl_path
+      ? `file://${dfmResult.repaired_stl_path}`
+      : stl_url
+    db.prepare(`UPDATE spec SET dfm_status = 'PASS', stl_path = ?, dfm_report = ?, updated_at = ? WHERE order_id = ?`)
+      .run(dfmResult.repaired_stl_path || null, JSON.stringify(dfmResult), Date.now(), orderId)
 
     enqueueJob(db, orderId, 'quote', {
-      stl_url: dfmResult.repaired_stl_path
-        ? `file://${dfmResult.repaired_stl_path}`
-        : stl_url,
+      stl_url: repairedStlUrl,
       geometry_hash,
     })
 

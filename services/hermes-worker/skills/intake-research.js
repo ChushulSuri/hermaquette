@@ -14,6 +14,7 @@
 import { nanoid } from 'nanoid'
 import { chat } from '../llm.js'
 import { emitEvent } from '../job-processor.js'
+import { dispatchToOrchestrator } from '../orchestrator.js'
 
 export async function intakeResearch(db, orderId, payload) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
@@ -30,14 +31,14 @@ export async function intakeResearch(db, orderId, payload) {
   // URLs — never fabricated by the model.
   const researchPrompt = `You are a manufacturing research assistant for Hermaquette, an AI-operated micro-manufacturing platform.
 
-The customer wants to make a 3D-printed decorative object: "${order.description}"
+The customer wants to make a 3D-printed full-color decorative figure: "${order.description}"
 
 Your tasks:
-1. Produce a clean, single-subject, front-facing description optimised for a coin-relief
-   image-generation model (it will be turned into a depth map, so describe SHAPE and RELIEF,
-   not colour — the part is printed in one material colour).
+1. Produce a clean, single-subject description optimised for a 3D figure image-generation model
+   (it will be used to generate a full-color 3D model — describe the character's overall shape,
+   proportions, style, and main colors for the best 3D result; no background, no props).
 2. List 2-3 reference search KEYWORDS (short phrases, NOT URLs) a person could search to find references.
-3. Recommend a material: pa12 (SLS nylon, durable), resin (SLA, fine detail), or tpu (flexible).
+3. Recommend a material: pa12 (SLS nylon, durable, recommended default), resin (SLA, fine detail), or tpu (flexible).
 4. Capture the requested colour/finish if the customer mentioned one (e.g. "black", "natural"); else "natural".
 5. Set ip_sensitive=true if the object references a real brand, mascot, logo, or named character.
 
@@ -96,28 +97,22 @@ Respond ONLY with valid JSON — no markdown, no commentary:
   db.prepare(`UPDATE orders SET state = 'research_done', material = ?, updated_at = ? WHERE id = ?`)
     .run(material, Date.now(), orderId)
 
-  // Enqueue concept image generation
-  const jobId = nanoid()
-  db.prepare(`
-    INSERT INTO jobs (id, order_id, stage, status, payload, queued_at)
-    VALUES (?, ?, 'concept', 'queued', ?, ?)
-  `).run(jobId, orderId, JSON.stringify({
-    description: research.front_facing_description || order.description,
-    material,
-    color,
-  }), Date.now())
+  console.log(`[intake-research] order=${orderId} specId=${specId} material=${material} color=${color}`)
 
-  console.log(`[intake-research] order=${orderId} specId=${specId} material=${material} color=${color} nextJob=${jobId}`)
-
-  return {
+  const result = {
     specId,
     provenance: research.provenance,
     rights_framing: research.rights_framing,
-    front_facing_description: research.front_facing_description,
+    front_facing_description: research.front_facing_description || order.description,
     material_recommendation: material,
     color,
-    next_stage: 'concept',
+    description: research.front_facing_description || order.description,
   }
+
+  // Hand off to Hermaquette orchestrator (gateway) or direct skill pipeline
+  await dispatchToOrchestrator(db, orderId, result)
+
+  return { ...result, next_stage: 'concept' }
 }
 
 /**
