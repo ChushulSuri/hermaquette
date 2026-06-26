@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb, requireDemoToken } from '@/lib/db'
 import { nanoid } from 'nanoid'
 
+const HERMES_URL = (process.env.HERMES_GATEWAY_URL || 'http://hermes-agent:8642').replace('/v1', '')
+const HERMES_KEY = process.env.HERMES_API_KEY || 'hermaquette-local'
+
 const MAX_DESCRIPTION_LENGTH = 2000
 const MIN_DESCRIPTION_LENGTH = 10
 
@@ -47,18 +50,47 @@ export async function POST(req: NextRequest) {
     VALUES (?, 'intake', ?, ?, ?, ?)
   `).run(orderId, description.trim(), material, now, now)
 
-  // Enqueue research job (V1 fallback — always works)
-  const jobId = nanoid(21)
-  db.prepare(`
-    INSERT INTO jobs (id, order_id, stage, status, payload, queued_at)
-    VALUES (?, ?, 'research', 'queued', ?, ?)
-  `).run(jobId, orderId, JSON.stringify({ description: description.trim(), material }), now)
+  // Call Hermes /v1/runs to start the agentic pipeline
+  const runInput = `New order for Hermaquette manufacturing service.
+Order ID: ${orderId}
+Description: ${description.trim()}
+Material: ${material}
+Please process this order: generate concept images, get customer approval, then produce a 3D model and quote.`
 
-  // Emit agent attribution event so the UI shows Hermes agent delegation
-  db.prepare(`
-    INSERT INTO events (order_id, stage, event, message, data, created_at)
-    VALUES (?, 'orchestrator', 'started', 'Hermaquette is analyzing your request', ?, ?)
-  `).run(orderId, JSON.stringify({ agent: 'Hermaquette' }), now)
+  let runId: string | null = null
+  try {
+    const runRes = await fetch(`${HERMES_URL}/v1/runs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${HERMES_KEY}`,
+      },
+      body: JSON.stringify({ input: runInput }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (runRes.ok) {
+      const runData = await runRes.json() as { run_id: string }
+      runId = runData.run_id
+      db.prepare('UPDATE orders SET run_id = ?, updated_at = ? WHERE id = ?')
+        .run(runId, now, orderId)
+    } else {
+      // Gateway unreachable — save order with error state
+      db.prepare("UPDATE orders SET state = 'error', error_msg = ?, updated_at = ? WHERE id = ?")
+        .run(`Hermes gateway HTTP ${runRes.status}`, now, orderId)
+      db.prepare("INSERT INTO events (order_id, stage, event, message, data, created_at) VALUES (?, 'orchestrator', 'error', ?, ?, ?)")
+        .run(orderId, 'Hermes agent unavailable — please retry', JSON.stringify({ error: `HTTP ${runRes.status}` }), now)
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    db.prepare("UPDATE orders SET state = 'error', error_msg = ?, updated_at = ? WHERE id = ?")
+      .run(`Hermes gateway unreachable: ${msg}`, now, orderId)
+    db.prepare("INSERT INTO events (order_id, stage, event, message, data, created_at) VALUES (?, 'orchestrator', 'error', ?, ?, ?)")
+      .run(orderId, 'Hermes agent unavailable — please retry', JSON.stringify({ error: msg }), now)
+  }
 
-  return NextResponse.json({ id: orderId, state: 'intake' }, { status: 201 })
+  // Emit attribution event
+  db.prepare("INSERT INTO events (order_id, stage, event, message, data, created_at) VALUES (?, 'orchestrator', 'started', ?, ?, ?)")
+    .run(orderId, 'Hermaquette is analyzing your request', JSON.stringify({ agent: 'Hermaquette', run_id: runId }), now)
+
+  return NextResponse.json({ id: orderId, state: 'intake', run_id: runId }, { status: 201 })
 }
