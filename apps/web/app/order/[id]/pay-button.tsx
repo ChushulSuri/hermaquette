@@ -4,11 +4,13 @@ import { useState } from 'react'
 interface PayButtonProps {
   orderId: string
   revenueCents: number
+  currency?: string
 }
 
-export function PayButton({ orderId, revenueCents }: PayButtonProps) {
+export function PayButton({ orderId, revenueCents, currency }: PayButtonProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const symbol = (currency || 'usd').toLowerCase() === 'eur' ? '€' : '$'
 
   async function handlePay() {
     setLoading(true)
@@ -42,7 +44,7 @@ export function PayButton({ orderId, revenueCents }: PayButtonProps) {
         disabled={loading}
         className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-4 px-8 rounded-xl text-lg transition-colors shadow-lg shadow-emerald-900/50"
       >
-        {loading ? 'Opening Stripe...' : `Pay $${(revenueCents / 100).toFixed(2)} (TEST MODE)`}
+        {loading ? 'Opening Stripe...' : `Pay ${symbol}${(revenueCents / 100).toFixed(2)} (TEST MODE)`}
       </button>
       {error && <p className="text-red-400 text-sm mt-2 text-center">{error}</p>}
       <p className="text-xs text-gray-500 text-center mt-2">

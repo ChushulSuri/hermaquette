@@ -70,7 +70,10 @@ export async function buildGeometry(db, orderId, payload) {
       // text_depth: thin (0.3mm) triggers DFM fail on first run; learned pre-thicken
       // or HAPPY_PATH=on uses 0.6mm to pass first-try on subsequent objects.
       text_depth_mm: useThickText ? 0.6 : 0.3,
-      engrave_depth_mm: useThickText ? 0.6 : 0.5,
+      // engrave_depth_mm is the param frame.py actually extrudes — set thin (0.3) so
+      // dfm.py:76 triggers the engrave_too_shallow check and the re-built STL genuinely differs.
+      engrave_depth_mm: useThickText ? 0.6 : 0.3,
+      plaque_text: order.description.split(' ').slice(0, 3).join(' ').toUpperCase().slice(0, 14),
       plaque_width_mm: 100,
       plaque_height_mm: 80,
     },

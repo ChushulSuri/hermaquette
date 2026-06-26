@@ -134,9 +134,16 @@ export async function POST(
   }
 
   if (body.action === 'approve_vendor_checkout') {
-    // Idempotency
+    // Idempotency: already approved
     if (order.state === 'checkout_approved') {
       return NextResponse.json({ ok: true, state: 'checkout_approved', idempotent: true })
+    }
+    // Idempotency: job already enqueued/running (duplicate click before worker picks it up)
+    const pendingJob = db.prepare(
+      "SELECT id FROM jobs WHERE order_id=? AND stage='checkout_approve' AND status IN ('queued','running')"
+    ).get(id) as { id: string } | undefined
+    if (pendingJob) {
+      return NextResponse.json({ ok: true, state: order.state, idempotent: true })
     }
 
     const vendorOrder = db.prepare('SELECT * FROM vendor_order WHERE order_id=? ORDER BY created_at DESC LIMIT 1')

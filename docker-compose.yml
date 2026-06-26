@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        - NEXT_PUBLIC_DEMO_TOKEN=${DEMO_TOKEN}
     ports:
       - "3000:3000"
     environment:

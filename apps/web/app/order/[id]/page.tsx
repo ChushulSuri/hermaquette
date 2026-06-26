@@ -241,7 +241,7 @@ export default function OrderPage({ params, searchParams }: PageProps) {
       {/* Pay Button */}
       {showPayButton && ledger && (
         <div className="mb-6">
-          <PayButton orderId={params.id} revenueCents={ledger.revenue_cents!} />
+          <PayButton orderId={params.id} revenueCents={ledger.revenue_cents!} currency={ledger.currency} />
         </div>
       )}
 
@@ -258,7 +258,7 @@ export default function OrderPage({ params, searchParams }: PageProps) {
       {/* Vendor Approval */}
       {showVendorApproval && vendorOrder && (
         <div className="mb-6">
-          <VendorApprovalPanel orderId={params.id} vendorOrder={vendorOrder} />
+          <VendorApprovalPanel orderId={params.id} currency={ledger?.currency} vendorOrder={vendorOrder} />
         </div>
       )}
 

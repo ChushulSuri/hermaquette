@@ -36,8 +36,8 @@ def assemble(
         params.setdefault("text_depth_mm", 0.6)
         params.setdefault("engrave_depth_mm", 0.6)
     else:
-        params.setdefault("text_depth_mm", 0.3)   # intentionally thin -> DFM FAIL demo
-        params.setdefault("engrave_depth_mm", 0.5)
+        params.setdefault("text_depth_mm", 0.3)    # intentionally thin -> DFM FAIL demo
+        params.setdefault("engrave_depth_mm", 0.3)  # 0.3 < 0.5 PA12 min -> engrave_too_shallow fires
 
     params.setdefault("plaque_width_mm", 100.0)
     params.setdefault("plaque_height_mm", 80.0)
@@ -74,6 +74,7 @@ def assemble(
         plaque_width_mm=params["plaque_width_mm"],
         plaque_height_mm=params["plaque_height_mm"],
         base_thickness_mm=params["base_thickness_mm"],
+        text=params.get("plaque_text", "HERMAQUETTE"),
         text_depth_mm=params["text_depth_mm"],
         engrave_depth_mm=params["engrave_depth_mm"],
         output_path=frame_path,

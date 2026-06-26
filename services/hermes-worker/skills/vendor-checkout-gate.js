@@ -104,12 +104,35 @@ export async function approveVendorCheckout(db, orderId) {
   let cardId = null
   let spendPath = 'sqlite'
 
+  // Read ledger to get the order currency (Sculpteo quotes in EUR)
+  const ledger = db.prepare('SELECT currency FROM ledger WHERE order_id = ?').get(orderId)
+  const issuingCurrency = (ledger?.currency || 'usd').toLowerCase()
+
   if (process.env.STRIPE_ISSUING_ENABLED === 'true' && process.env.STRIPE_SECRET_KEY) {
     try {
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+      // Stripe Issuing requires a cardholder — create a minimal one per order
+      const cardholder = await stripe.issuing.cardholders.create({
+        name: 'Hermaquette Demo',
+        email: 'demo@hermaquette.ai',
+        type: 'individual',
+        billing: {
+          address: {
+            line1: '123 Hermes St',
+            city: 'San Francisco',
+            state: 'CA',
+            postal_code: '94101',
+            country: 'US',
+          },
+        },
+        metadata: { order_id: orderId, hermaquette: 'true' },
+      })
+
       // Test-mode only: issue a virtual card scoped to shipping merchants
       const card = await stripe.issuing.cards.create({
-        currency: 'usd',
+        cardholder: cardholder.id,
+        currency: issuingCurrency,
         type: 'virtual',
         spending_controls: {
           spending_limits: [{

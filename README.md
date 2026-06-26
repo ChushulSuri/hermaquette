@@ -26,8 +26,8 @@
 - Primary LLM: GPT-4o via ChatGPT OAuth, configured through Hermes (`HERMES_AUTH_JSON`); falls back to OpenAI API key if auth.json is absent
 
 ### NVIDIA Nemotron
-- The **on-camera DFM-error explanation** is the designated Nemotron step: Hermes uses `nvidia/llama-3.1-nemotron-70b-instruct` via `integrate.api.nvidia.com/v1` to explain each DFM failure in plain language
-- Configured via Hermes's native `hermes model` provider routing — Nemotron is a first-class LLM provider, not a bolt-on
+- The **on-camera DFM-error explanation** is the designated Nemotron step: `llm.js` calls `nvidia/llama-3.1-nemotron-70b-instruct` directly via `integrate.api.nvidia.com/v1` for `dfm_explanation` and `repair_narration` steps
+- Routed by step name in `llm.js` (`NEMOTRON_STEPS` set): bypasses the Hermes gateway so Nemotron latency doesn't block the gateway queue
 - Graceful fallback to GPT if Nemotron is unreachable (order still progresses)
 
 ### Stripe

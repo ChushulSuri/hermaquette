@@ -22,6 +22,11 @@ COPY db/ /db/
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Bake NEXT_PUBLIC_DEMO_TOKEN at build time so the client bundle carries the
+# correct value. Passed via docker-compose build.args from DEMO_TOKEN in .env.
+ARG NEXT_PUBLIC_DEMO_TOKEN
+ENV NEXT_PUBLIC_DEMO_TOKEN=${NEXT_PUBLIC_DEMO_TOKEN}
+
 RUN npm run build
 
 # ── Stage 3: Runner ───────────────────────────────────────────────────────────

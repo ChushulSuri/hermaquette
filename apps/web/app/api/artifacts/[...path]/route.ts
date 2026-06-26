@@ -12,7 +12,7 @@ export async function GET(
   // Security: prevent path traversal
   const resolvedPath = path.resolve(filePath)
   const resolvedArtifacts = path.resolve(artifactsDir)
-  if (!resolvedPath.startsWith(resolvedArtifacts)) {
+  if (resolvedPath !== resolvedArtifacts && !resolvedPath.startsWith(resolvedArtifacts + path.sep)) {
     return new NextResponse('Forbidden', { status: 403 })
   }
 

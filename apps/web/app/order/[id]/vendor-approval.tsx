@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 
 interface VendorApprovalPanelProps {
   orderId: string
+  currency?: string
   vendorOrder: {
     vendor_cost_cents?: number
     spend_cap_cents?: number
@@ -11,10 +12,11 @@ interface VendorApprovalPanelProps {
   }
 }
 
-export function VendorApprovalPanel({ orderId, vendorOrder }: VendorApprovalPanelProps) {
+export function VendorApprovalPanel({ orderId, currency, vendorOrder }: VendorApprovalPanelProps) {
   const [approving, setApproving] = useState(false)
   const router = useRouter()
   const ISSUING_ENABLED = process.env.NEXT_PUBLIC_STRIPE_ISSUING_ENABLED === 'true'
+  const symbol = (currency || 'usd').toLowerCase() === 'eur' ? '€' : '$'
 
   async function handleApprove() {
     setApproving(true)
@@ -37,11 +39,11 @@ export function VendorApprovalPanel({ orderId, vendorOrder }: VendorApprovalPane
       <div className="bg-gray-900/50 rounded-lg p-4 mb-4 space-y-2 text-sm">
         <div className="flex justify-between text-gray-300">
           <span>Vendor cost</span>
-          <span className="font-mono">${((vendorOrder.vendor_cost_cents || 0) / 100).toFixed(2)}</span>
+          <span className="font-mono">{symbol}{((vendorOrder.vendor_cost_cents || 0) / 100).toFixed(2)}</span>
         </div>
         <div className="flex justify-between text-gray-300">
           <span>Spend cap</span>
-          <span className="font-mono">${((vendorOrder.spend_cap_cents || 5000) / 100).toFixed(2)}</span>
+          <span className="font-mono">{symbol}{((vendorOrder.spend_cap_cents || 5000) / 100).toFixed(2)}</span>
         </div>
         <div className="flex justify-between text-xs text-gray-500">
           <span>Governance method</span>
