@@ -38,6 +38,7 @@ interface Ledger {
   gross_margin_pre_fees_cents?: number
   lead_time_days?: number
   quote_source?: string
+  currency?: string
   stripe_payment_status?: string
 }
 

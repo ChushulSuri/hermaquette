@@ -14,13 +14,17 @@ import { readFileSync } from 'fs'
 import fetch from 'node-fetch'
 import { emitEvent } from '../job-processor.js'
 
-// Read MEMORY.md and return true if a prior DFM run recorded a thin-text lesson.
-// This is the honest KTD11 learning loop: the second object pre-thickens because
-// Hermes *learned* from the first run, not because of a hardcoded env flag.
+const HERMES_MEMORY_PATH = '/hermes/MEMORY.md'
+
+// Return true only if dfm-gate has appended a runtime DFM lesson (the `## DFM Lesson —`
+// heading it writes after each FIXABLE cycle). Deliberately does NOT match the pre-seeded
+// documentation section ("## Initial Lessons") so the hero fail/fix beat fires on every
+// cold run until Hermes actually learns it.
 function hasLearnedThinTextLesson() {
   try {
-    const memory = readFileSync('/hermes/MEMORY.md', 'utf-8')
-    return /pre-thicken|text_depth.*>=?\s*0\.6|thin.*(text|feature)/i.test(memory)
+    const memory = readFileSync(HERMES_MEMORY_PATH, 'utf-8')
+    // Only count lessons written at runtime by dfm-gate.js (ISO-date heading)
+    return /^## DFM Lesson — \d{4}-\d{2}-\d{2}/m.test(memory)
   } catch {
     return false
   }
@@ -87,6 +91,14 @@ export async function buildGeometry(db, orderId, payload) {
   }
 
   const result = await res.json()
+
+  // Non-manifold union → BLOCKED: set order state and stop pipeline gracefully
+  if (result.status === 'BLOCKED') {
+    db.prepare(`UPDATE orders SET state = 'blocked', error_msg = ?, updated_at = ? WHERE id = ?`)
+      .run(result.reason || 'Geometry union produced non-manifold mesh', Date.now(), orderId)
+    emitEvent(db, orderId, 'geometry', 'blocked', `Hermes: ${result.reason}`, result)
+    return { status: 'BLOCKED', reason: result.reason }
+  }
 
   // Update spec
   db.prepare(`

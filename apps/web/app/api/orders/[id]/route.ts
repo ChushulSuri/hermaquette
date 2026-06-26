@@ -73,14 +73,15 @@ export async function GET(
   })
 }
 
-// POST to approve a concept image direction or vendor checkout
+// POST to approve a concept image direction or vendor checkout.
+// No DEMO_TOKEN required: the order ID (nanoid-21) is the bearer.
+// Approve actions are cheap state transitions — they don't trigger
+// LLM calls or payments directly. (DEMO_TOKEN guards /api/orders POST
+// and /api/checkout, which do trigger expensive/financial operations.)
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  if (!requireDemoToken(req)) {
-    return NextResponse.json({ error: 'Invalid demo token' }, { status: 401 })
-  }
 
   const { id } = params
   const db = getDb()

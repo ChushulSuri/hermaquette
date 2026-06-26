@@ -12,14 +12,12 @@
 import { nanoid } from 'nanoid'
 import fetch from 'node-fetch'
 import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { chat } from '../llm.js'
 import { emitEvent } from '../job-processor.js'
 
 const CAD_DFM_URL = process.env.CAD_DFM_URL || 'http://cad-dfm:8000'
-const __dirname  = path.dirname(fileURLToPath(import.meta.url))
-const MEMORY_PATH = path.resolve(__dirname, '../../../hermes/MEMORY.md')
+// Explicit bind-mount path — same path build-geometry.js reads from
+const MEMORY_PATH = '/hermes/MEMORY.md'
 
 export async function dfmGate(db, orderId, payload) {
   const spec = db.prepare('SELECT * FROM spec WHERE order_id = ?').get(orderId)

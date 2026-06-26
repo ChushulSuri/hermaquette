@@ -207,5 +207,6 @@ if __name__ == "__main__":
     params = json.loads(args.params)
     result = assemble(args.order_id, args.image, args.output_dir, params)
     print(json.dumps(result))
-    if result.get("status") == "BLOCKED":
-        sys.exit(1)
+    # Always exit 0: BLOCKED is a valid pipeline result, not a Python error.
+    # Non-zero exit causes server.py to raise HTTP 500, discarding the structured result.
+    sys.exit(0)

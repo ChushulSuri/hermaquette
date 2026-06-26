@@ -20,10 +20,10 @@
 ## Sponsor tech coverage
 
 ### Nous / Hermes
-- All 8 pipeline stages are **Hermes custom skills** (`hermes/skills/hermaquette/*/SKILL.md`)
-- The worker is a **private Hermes agent** consuming jobs and emitting Hermes-attributed progress events
-- **DFM self-improvement loop**: each failure appends a lesson to `hermes/MEMORY.md`; later runs consult the memory and pre-empt known failures
-- GPT (ChatGPT OAuth) is the **primary orchestration LLM** for all reasoning steps
+- The `hermes-agent` runtime (open-source, MIT) runs inside the worker container as a gateway; all pipeline LLM calls are routed through it via its OpenAI-compatible API (`hermes gateway` on port 8642)
+- 8 skill definitions live in `hermes/skills/hermaquette/*/SKILL.md`; the pipeline job handlers (Node.js) call the Hermes gateway and emit Hermes-attributed progress events in the UI
+- **DFM self-improvement loop**: each FIXABLE failure appends a runtime `## DFM Lesson —` entry to `hermes/MEMORY.md`; build-geometry reads that file on the next run and pre-thickens before the DFM gate (honest cross-object transfer)
+- Primary LLM: GPT-4o via ChatGPT OAuth, configured through Hermes (`HERMES_AUTH_JSON`); falls back to OpenAI API key if auth.json is absent
 
 ### NVIDIA Nemotron
 - The **on-camera DFM-error explanation** is the designated Nemotron step: Hermes uses `nvidia/llama-3.1-nemotron-70b-instruct` via `integrate.api.nvidia.com/v1` to explain each DFM failure in plain language
@@ -31,7 +31,7 @@
 - Graceful fallback to GPT if Nemotron is unreachable (order still progresses)
 
 ### Stripe
-- **Customer leg**: hosted Stripe Checkout (test mode), session created via the **Stripe Agent Toolkit** with a restricted `rk_test_*` key; confirmed server-side by `sessions.retrieve` (no webhooks, idempotent)
+- **Customer leg**: hosted Stripe Checkout (test mode), session created via the Stripe SDK (`stripe.checkout.sessions.create`) with a restricted `rk_test_*` key; confirmed server-side by `sessions.retrieve` (no webhooks, idempotent)
 - **Vendor leg**: on human approval, Hermes issues a **test-mode Stripe Issuing virtual card** with `spending_limits` = spend cap and merchant-category scope — the actual agentic-commerce governance primitive. Card is **never charged** (no real Sculpteo purchase)
 - Fallback: if Issuing test access is unavailable, the governed approval record is written to SQLite with the same gate semantics
 
