@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS ledger (
   updated_at                  INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
-CREATE INDEX IF NOT EXISTS idx_ledger_order_id ON ledger(order_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_order_id ON ledger(order_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_stripe_session_id ON ledger(stripe_session_id);
 
 -- ── vendor_order ─────────────────────────────────────────────────────────────

@@ -83,13 +83,20 @@ export async function vendorQuote(db, orderId, payload) {
   // Printability check — only enforce for live vendor responses, not manual fallback
   if (quoteResult.quote_source !== 'manual') {
     const printability = quoteResult.printability ?? quoteResult.status
-    const isPrintable = printability == null ||
-      printability === 'printable' || printability === 'ok'
-    if (!isPrintable) {
-      emitEvent(db, orderId, 'quote', 'printability_failed',
-        `Sculptor mesh rejected by vendor: printability="${printability}"`,
-        { printability, quote_source: quoteResult.quote_source })
-      throw new Error(`Vendor printability check failed: ${printability}`)
+    if (printability == null) {
+      // Sculpteo response didn't include a printability verdict — log and continue
+      emitEvent(db, orderId, 'quote', 'printability_unverified',
+        'Vendor response has no printability field — cannot verify',
+        { quote_source: quoteResult.quote_source })
+      console.warn('[vendor-quote] No printability verdict in Sculpteo response — check API format')
+    } else {
+      const isPrintable = printability === 'printable' || printability === 'ok'
+      if (!isPrintable) {
+        emitEvent(db, orderId, 'quote', 'printability_failed',
+          `Sculptor mesh rejected by vendor: printability="${printability}"`,
+          { printability, quote_source: quoteResult.quote_source })
+        throw new Error(`Vendor printability check failed: ${printability}`)
+      }
     }
   }
 

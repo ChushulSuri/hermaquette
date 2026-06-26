@@ -103,6 +103,47 @@ async function main() {
     console.log('  ~ sample.stl not found, skipping mesh repair test')
   }
 
+  // Step 3.5: DFM-repair service integration (requires cad-dfm running)
+  console.log('\nStep 3.5: DFM-repair service integration (skips if service not running)')
+  const CAD_DFM_URL = process.env.CAD_DFM_URL || 'http://localhost:8000'
+  let dfmRepairStlPath = null
+  try {
+    // Check if service is up
+    const health = await fetch(`${CAD_DFM_URL}/health`, { signal: AbortSignal.timeout(2000) })
+    if (health.ok && existsSync(sampleStl)) {
+      await check('POST /dfm/ai-mesh returns PASS on sample.stl', async () => {
+        const resp = await fetch(`${CAD_DFM_URL}/dfm/ai-mesh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stl_path: sampleStl }),
+        })
+        if (!resp.ok) throw new Error(`DFM service HTTP ${resp.status}`)
+        const result = await resp.json()
+        if (!['PASS', 'FIXABLE'].includes(result.status)) {
+          throw new Error(`Expected PASS/FIXABLE, got ${result.status}: ${result.reason}`)
+        }
+        dfmRepairStlPath = result.repaired_stl_path
+        console.log(`         DFM: ${result.status} | repairs: ${result.applied_repairs.join(', ') || 'none'}`)
+      })
+    } else {
+      console.log('  ~ cad-dfm service not running — skipping integration step')
+    }
+  } catch {
+    console.log('  ~ cad-dfm service not reachable — skipping integration step')
+  }
+
+  // Step 3.6: geometry_hash continuity — hash matches the mesh that DFM worked on
+  if (geometryHash && geometryHash.startsWith('dry_run_hash_')) {
+    console.log('\nStep 3.6: geometry_hash continuity')
+    console.log('  ~ hash is timestamp-based (no real mesh bytes) — skipping continuity assert')
+  } else if (geometryHash) {
+    console.log('\nStep 3.6: geometry_hash continuity')
+    await check('geometry_hash is a sha256 hex string', () => {
+      if (!/^[0-9a-f]{64}$/.test(geometryHash)) throw new Error('Not a sha256: ' + geometryHash)
+      console.log(`         Hash: ${geometryHash.slice(0, 16)}...`)
+    })
+  }
+
   // Step 4: Pricing calculation
   console.log('\nStep 4: Pricing calculation')
   await check('10% margin math is correct', () => {

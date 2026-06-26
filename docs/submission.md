@@ -25,8 +25,11 @@ material color (PA12 SLS) — honest about both.
 ## How Hermes does the work (Nous Research)
 
 This is the key judge differentiator: **Hermes does the core work, not a web app that
-occasionally calls an LLM.** Three real Hermes agents delegate via native `delegate_task`;
-manufacturing operations are Hermes skills (SKILL.md + scripts).
+occasionally calls an LLM.** Three Hermes agent zones (Hermaquette → Sculptor → Follow-up)
+are defined in `hermes/agents/*/AGENT.md`; manufacturing operations are Hermes skills
+(SKILL.md + scripts). **Two runtime modes**: when `HERMES_GATEWAY_URL` is configured, the
+gateway runs real agents with native `delegate_task`; in direct mode (default), the same
+skills execute as a JS pipeline in `hermes-worker` with identical Hermes-attributed events.
 
 - **Hermaquette (orchestrator agent)**: receives the order, calls the `concept-images` skill
   (Nano Banana Pro), reviews concept images against 3D-friendliness criteria and redoes up to

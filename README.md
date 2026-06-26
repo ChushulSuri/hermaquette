@@ -3,13 +3,14 @@
 From a sentence to a colored 3D figure, with three Hermes agents doing the work.
 
 > Hermaquette orchestrates. Sculptor generates and repairs. Follow-up QAs delivery.
-> All three are real Hermes agents delegating via `delegate_task`.
+> `delegate_task` fires when `HERMES_GATEWAY_URL` is configured; direct mode runs the same
+> skills as a JS pipeline with identical Hermes-attributed events.
 
 **Hermaquette** is a Hermes-operated micro-manufacturing pipeline. You describe a non-electronic object; three Hermes agents research references, generate concept images, build a full-3D colored model, validate and repair it for printability, quote it from a real vendor, take a governed Stripe payment, and manage fulfillment — end-to-end, with a visible DFM fail/fix loop in the Sculptor agent, a colored 3D model rotating in the browser, and a learning memory that improves with each run.
 
 ## What's new in V2
 
-- **Three Hermes agents** — Hermaquette (orchestrator) → Sculptor → Follow-up, wired with native `delegate_task`; manufacturing operations are Hermes skills (SKILL.md + scripts).
+- **Three Hermes-attributed skill zones** — Hermaquette (orchestrator) → Sculptor → Follow-up, defined in `hermes/agents/*/AGENT.md`. When `HERMES_GATEWAY_URL` is set, the gateway runs the real agents using native `delegate_task`. Without it, the same skills execute as a JS pipeline in `hermes-worker` with identical Hermes-attributed events.
 - **Full 3D colored model** via fal.ai Hunyuan3D v2 — the customer orbits and zooms a PBR-textured GLB in the browser; this is a true 3D figure in the round, not a V1 heightmap relief.
 - **Agentic DFM-repair loop** — the Sculptor agent verifies the AI mesh (watertight, wall thickness, size, components) and runs a deterministic repair macro until the part is manufacturable, then makes a bounded accept/reject call. Unrepairable → BLOCKED.
 - **PBR textured GLB** — colored interactive viewer with environment lighting; the on-screen figure has realistic material/lighting response.
@@ -65,7 +66,7 @@ flowchart TB
 ## Sponsor tech coverage
 
 ### Nous / Hermes
-- **Three Hermes agents** (`hermes/agents/*/AGENT.md`) wire with `delegate_task`: Hermaquette (orchestrator) → Sculptor → Follow-up. Each manufacturing operation is a Hermes **skill** (`SKILL.md` + `scripts/`); the agents invoke real skills, not hidden JS.
+- **Three Hermes agent definitions** (`hermes/agents/*/AGENT.md`) — Hermaquette orchestrator → Sculptor → Follow-up. Each manufacturing operation is a Hermes **skill** (`SKILL.md` + `scripts/`). **Two execution modes**: gateway mode (`HERMES_GATEWAY_URL` set) runs the real agents with native `delegate_task`; direct mode (default) executes the same skills as a JS pipeline in `hermes-worker` with Hermes-attributed progress events — the event log is identical either way.
 - Two `hermes-agent` gateway processes start inside the worker container; `llm.js` (all chat/reasoning) talks only to `http://127.0.0.1:{8642|8643}/v1` — it never holds provider credentials or instantiates direct OpenAI/Nemotron clients. Image generation (`concept-images.js`) uses a direct Nano Banana / DALL-E 3 call since image endpoints don't go through the chat gateway.
 - Port 8642: primary gateway (GPT-5.5, reasoning_effort:xhigh, ChatGPT OAuth via `HERMES_AUTH_JSON`); handles all steps except designated NVIDIA ones.
 - Port 8643: Nemotron gateway (same `hermes-agent` binary, separate `HERMES_HOME`, NVIDIA API key — `dfm_explanation` and `repair_narration` steps route here).
