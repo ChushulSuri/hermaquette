@@ -1,61 +1,139 @@
 # Hermaquette
 
-> Other agents move bits. Hermaquette ships atoms.
+From a sentence to a colored 3D figure, with three Hermes agents doing the work.
 
-**Hermaquette** is a Hermes-operated micro-manufacturing pipeline. You describe a non-electronic object; Hermes researches references, generates concept images, builds manufacturable geometry, validates it locally, quotes it from a real vendor, takes a governed Stripe payment, and manages the vendor checkout — end-to-end, with a visible DFM fail/fix loop and a learning memory that improves with each run.
+> Hermaquette orchestrates. Sculptor generates and repairs. Follow-up QAs delivery.
+> All three are real Hermes agents delegating via `delegate_task`.
+
+**Hermaquette** is a Hermes-operated micro-manufacturing pipeline. You describe a non-electronic object; three Hermes agents research references, generate concept images, build a full-3D colored model, validate and repair it for printability, quote it from a real vendor, take a governed Stripe payment, and manage fulfillment — end-to-end, with a visible DFM fail/fix loop in the Sculptor agent, a colored 3D model rotating in the browser, and a learning memory that improves with each run.
+
+## What's new in V2
+
+- **Three Hermes agents** — Hermaquette (orchestrator) → Sculptor → Follow-up, wired with native `delegate_task`; manufacturing operations are Hermes skills (SKILL.md + scripts).
+- **Full 3D colored model** via fal.ai Hunyuan3D v2 — the customer orbits and zooms a PBR-textured GLB in the browser; this is a true 3D figure in the round, not a V1 heightmap relief.
+- **Agentic DFM-repair loop** — the Sculptor agent verifies the AI mesh (watertight, wall thickness, size, components) and runs a deterministic repair macro until the part is manufacturable, then makes a bounded accept/reject call. Unrepairable → BLOCKED.
+- **PBR textured GLB** — colored interactive viewer with environment lighting; the on-screen figure has realistic material/lighting response.
+
+V1 commerce (Sculpteo VendorQuoteAdapter, Stripe Checkout, Stripe Issuing gate, ledger) is reused unchanged.
 
 ## The demo loop (90–110 seconds)
 
-1. **Describe** the Nous Girl Hermes Relief Plaque
-2. **Hermes researches** provenance + rights framing
-3. **Concept images** generated (Nano Banana Pro / DALL-E 3)
-4. **3D geometry built**: depth map → relief slab → `manifold3d` union onto parametric plaque
-5. **DFM fails** (text too thin for PA12) → Hermes applies one bounded auto-fix → **DFM PASS** ← visible on camera
-6. **Hermes records a lesson** in MEMORY.md for future runs
-7. **Sculpteo quote** + 10% service fee → customer price shown
-8. **Stripe Checkout** (TEST MODE) → payment confirmed server-side
-9. **Governed vendor gate**: Stripe Issuing virtual card issued with spend cap (never charged)
-10. **Generic object** runs next — lesson from step 6 pre-thickens text → **first-run DFM PASS** (learning loop payoff)
+1. **Describe** the Nous Research Girl figure (chunky chibi / designer-toy style)
+2. **Hermaquette (orchestrator)** understands the request, calls concept-images skill (Nano Banana), reviews against 3D-friendliness criteria
+3. **Concept images** appear — customer selects one
+4. **Hermaquette delegates** to the Sculptor agent (`delegate_task`)
+5. **Sculptor** calls image-to-3D skill (fal.ai Hunyuan3D v2) — untextured geometry arrives
+6. **DFM-repair loop** — Sculptor runs the repair macro → **DFM PASS** (or bounded retries → BLOCKED) ← visible on camera
+7. **Nemotron explains** the DFM result in plain English (NVIDIA beat)
+8. **Sculptor textures** the same frozen geometry → colored GLB + printable STL returned to orchestrator
+9. **Colored 3D model** spins in the browser (orbit / zoom / rotate)
+10. **Sculpteo quote** + 10% service fee → customer price shown
+11. **Stripe Checkout** (TEST MODE) → payment confirmed server-side
+12. **Governed vendor gate**: Stripe Issuing virtual card issued with spend cap (never charged)
+13. **Hermaquette delegates** to Follow-up agent (tracking + GPT-vision delivery QA)
+
+## Architecture
+
+```
+Customer → Web UI
+  → Hermaquette (orchestrator agent)
+      → concept-images skill (Nano Banana)
+      → delegate_task → Sculptor agent
+          → image-to-3d skill (fal.ai Hunyuan3D v2)
+          → dfm-repair skill (manifold3d repair loop)
+          → returns: colored GLB + printable STL
+      → sculpteo-quote → stripe-checkout → issuing-gate skills
+      → delegate_task → Follow-up agent (tracking + vision QA)
+```
+
+```mermaid
+flowchart TB
+  UI["Next.js web/api<br/>(product backend owns state)"] -->|enqueue order, stream progress| ORCH
+  subgraph Hermes["Hermes runtime (gateway :8642 / Nemotron :8643)"]
+    ORCH["① Hermaquette — Orchestrator agent<br/>requirements · image-gen tool · redos · commerce"]
+    ORCH -->|delegate_task: build 3D| SCULPT["② Sculptor — image-to-3D agent<br/>fal.ai gen · DFM-repair loop"]
+    ORCH -->|delegate_task: after-order| FOLLOW["③ Follow-up agent<br/>tracking · GPT-vision QA · reprint/refund"]
+  end
+  ORCH -->|skill| IMG["concept-images skill (Nano Banana)"]
+  SCULPT -->|skill| F3D["image-to-3D skill → fal.ai adapter<br/>Hunyuan3D v2"]
+  SCULPT -->|skill| DFM["dfm-repair skill (verify + repair mesh)"]
+  ORCH -->|skill| VQ["sculpteo-quote skill (validates final STL)"]
+  ORCH -->|skill| PAY["stripe-checkout + issuing-gate skills"]
+  ORCH --> DB[(SQLite: orders · spec · ledger · vendor_order)]
+```
 
 ## Sponsor tech coverage
 
 ### Nous / Hermes
-- The `hermes-agent` runtime (open-source, MIT) runs inside the worker container as a gateway; all pipeline LLM calls are routed through it via its OpenAI-compatible API (`hermes gateway` on port 8642)
-- 8 skill definitions live in `hermes/skills/hermaquette/*/SKILL.md`; the pipeline job handlers (Node.js) call the Hermes gateway and emit Hermes-attributed progress events in the UI
-- **DFM self-improvement loop**: each FIXABLE failure appends a runtime `## DFM Lesson —` entry to `hermes/MEMORY.md`; build-geometry reads that file on the next run and pre-thickens before the DFM gate (honest cross-object transfer)
-- Primary LLM: GPT-4o via ChatGPT OAuth, configured through Hermes (`HERMES_AUTH_JSON`); falls back to OpenAI API key if auth.json is absent
+- **Three Hermes agents** (`hermes/agents/*/AGENT.md`) wire with `delegate_task`: Hermaquette (orchestrator) → Sculptor → Follow-up. Each manufacturing operation is a Hermes **skill** (`SKILL.md` + `scripts/`); the agents invoke real skills, not hidden JS.
+- Two `hermes-agent` gateway processes start inside the worker container; `llm.js` (all chat/reasoning) talks only to `http://127.0.0.1:{8642|8643}/v1` — it never holds provider credentials or instantiates direct OpenAI/Nemotron clients. Image generation (`concept-images.js`) uses a direct Nano Banana / DALL-E 3 call since image endpoints don't go through the chat gateway.
+- Port 8642: primary gateway (GPT-5.5, reasoning_effort:xhigh, ChatGPT OAuth via `HERMES_AUTH_JSON`); handles all steps except designated NVIDIA ones.
+- Port 8643: Nemotron gateway (same `hermes-agent` binary, separate `HERMES_HOME`, NVIDIA API key — `dfm_explanation` and `repair_narration` steps route here).
+- Skills: `concept-images`, `image-to-3d`, `dfm-repair`, `sculpteo-quote`, `stripe-checkout`, `issuing-gate`, `tracking-qa` — all defined in `hermes/skills/hermaquette/*/SKILL.md`.
+- **DFM self-improvement loop**: each FIXABLE failure appends a runtime `## DFM Lesson —` entry to `hermes/MEMORY.md`; subsequent builds read it and pre-thicken before the DFM gate.
+- **Hermes-attributed progress** visible in the UI ("Hermaquette delegated to Sculptor…", "Sculptor: DFM PASS", "Follow-up: delivery QA") — the agent doing each step is named on camera.
 
 ### NVIDIA Nemotron
-- The **on-camera DFM-error explanation** is the designated Nemotron step: `llm.js` calls `nvidia/llama-3.1-nemotron-70b-instruct` directly via `integrate.api.nvidia.com/v1` for `dfm_explanation` and `repair_narration` steps
-- Routed by step name in `llm.js` (`NEMOTRON_STEPS` set): bypasses the Hermes gateway so Nemotron latency doesn't block the gateway queue
-- Graceful fallback to GPT if Nemotron is unreachable (order still progresses)
+- **Nemotron (`llama-3.1-nemotron-70b-instruct`) explains DFM results in plain English** when the Sculptor agent accepts or rejects a mesh — the unmistakable NVIDIA beat.
+- `start.sh` starts a second `hermes gateway` on port 8643 configured with `nvidia/llama-3.1-nemotron-70b-instruct` via `integrate.api.nvidia.com/v1`; the worker routes `dfm_explanation` and `repair_narration` steps to port 8643 — Hermes makes the NVIDIA API call, the worker holds no NVIDIA credentials.
+- Geometry decisions remain deterministic; Nemotron handles language only.
+- If `NEMOTRON_API_KEY` is absent, port 8643 is not started and those steps fall back to the primary gateway gracefully.
 
 ### Stripe
-- **Customer leg**: hosted Stripe Checkout (test mode), session created via the Stripe SDK (`stripe.checkout.sessions.create`) with a restricted `rk_test_*` key; confirmed server-side by `sessions.retrieve` (no webhooks, idempotent)
-- **Vendor leg**: on human approval, Hermes issues a **test-mode Stripe Issuing virtual card** with `spending_limits` = spend cap and merchant-category scope — the actual agentic-commerce governance primitive. Card is **never charged** (no real Sculpteo purchase)
-- Fallback: if Issuing test access is unavailable, the governed approval record is written to SQLite with the same gate semantics
+- **Customer leg**: hosted Stripe Checkout (test mode), session created via the Stripe SDK (`stripe.checkout.sessions.create`) with a restricted `rk_test_*` key; confirmed server-side by `sessions.retrieve` (no webhooks, idempotent).
+- **Vendor leg**: on human approval, Hermes issues a **test-mode Stripe Issuing virtual card** with `spending_limits` = spend cap and merchant-category scope — the actual agentic-commerce governance primitive. Card is **never charged** (no real Sculpteo purchase).
+- Fallback: if Issuing test access is unavailable, the governed approval record is written to SQLite with the same gate semantics.
 
 ## Honesty box
 
 | Claim | Reality |
 |-------|---------|
 | Stripe payments | TEST MODE — use card `4242 4242 4242 4242` |
+| Interactive viewer | Full-color PBR textured GLB — orbit/zoom/rotate |
+| Printed artifact | Single material color (PA12 SLS) — full-color printing is a V3 feature (deferred) |
 | Gross margin | Pre-fees only — Stripe fees and ops costs not deducted |
 | Vendor quote | Live Sculpteo API (or recorded fallback labelled as such) |
 | Rights | One-off personal gift · Not for resale · No affiliation with Nous/Hermes claimed |
-| Issuing card | Issued in test mode, never charged, never used for a live purchase |
+| Issuing card | Issued in test mode, demonstrated but never executed in demo |
+| fal.ai spend | Hard $10 budget cap with per-call precheck; DEV_BUDGET separate from demo allowance |
 
 ## Quick start
 
 ```bash
 cp .env.example .env
-# Fill in: OPENAI_API_KEY, STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, DEMO_TOKEN
-# Optional: NEMOTRON_API_KEY, SCULPTEO_API_KEY, NANOBANANA_API_KEY
-
+# Fill in the variables below, then:
 docker compose up --build
 # Web app: http://localhost:3000
 # cad-dfm API: http://localhost:8000/health
 # Worker health: http://localhost:3001/health
+```
+
+```env
+# fal.ai (image-to-3D)
+FAL_KEY=your_fal_api_key
+FAL_BUDGET_USD=10          # hard cap on fal.ai spend
+FAL_DEV_BUDGET_USD=7       # dev budget (reserve rest for demo recording)
+
+# Concept images
+NANOBANANA_API_KEY=...      # Nano Banana Pro (primary)
+OPENAI_API_KEY=...          # DALL-E 3 fallback
+
+# Vendor + Commerce
+SCULPTEO_EMAIL=...
+SCULPTEO_PASSWORD=...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# Hermes agents
+HERMES_GATEWAY_URL=http://localhost:8642   # Hermes agent gateway
+DEMO_TOKEN=...                             # Auth token for expensive endpoints
+
+# NVIDIA Nemotron (DFM explanation)
+NEMOTRON_API_KEY=...       # optional; falls back to primary gateway if absent
+
+# GPT-5.5 via ChatGPT OAuth (best demo quality)
+# Without HERMES_AUTH_JSON: start.sh auto-downgrades to gpt-4o (OPENAI_API_KEY path)
+HERMES_AUTH_JSON=...
 ```
 
 For the Cloudflare Tunnel demo URL, see `docs/runbook-coolify-digitalocean.md`.
@@ -73,37 +151,31 @@ HAPPY_PATH=off node scripts/demo/dry_run.js --all
 HAPPY_PATH=on node scripts/demo/dry_run.js --all
 ```
 
-## Architecture
-
-```
-Customer (browser)
-  → Next.js web/api  (App Router, port 3000)
-    → SQLite (orders, spec, ledger, vendor_order, events, jobs)
-    → Hermes worker (job loop, skills, port 3001)
-        → GPT (primary LLM: research, concepts, QA vision)
-        → NVIDIA Nemotron (DFM explanation — NVIDIA beat)
-        → Nano Banana Pro (concept images)
-        → cad-dfm service (port 8000):
-            → Depth Anything V2 → relief slab → build123d frame → manifold3d union
-            → trimesh DFM gate (PA12 constants)
-        → Sculpteo VendorQuoteAdapter (live API → browser → manual)
-        → Stripe (Checkout session + Issuing virtual card)
-```
-
 ## Structure
 
 ```
 hermaquette/
-├── apps/web/                 # Next.js App Router (intake, order page, Stripe)
-├── services/hermes-worker/   # Job loop: consume orders, run skills, emit events
-├── services/cad-dfm/         # Python: depth map, relief, DFM gate (FastAPI)
-├── hermes/skills/hermaquette/ # 8 Hermes SKILL.md definitions
-├── hermes/MEMORY.md           # DFM learning store (appended by dfm-gate skill)
-├── packages/vendor/           # VendorQuoteAdapter + spend adapter
-├── packages/llm/              # Provider shim: GPT primary, Nemotron designated
-├── db/schema.sql              # SQLite schema (7 tables)
-├── docker-compose.yml         # 4 services + 2 volumes
-├── scripts/demo/              # Dry-run harness, cache, happy-path toggle
+├── apps/web/                     # Next.js App Router (intake, order page, Stripe, colored viewer)
+├── services/hermes-worker/       # Orchestrator dispatch: enqueue orders → Hermes, stream progress
+├── services/cad-dfm/             # Python: mesh_repair.py + dfm.py (verify + repair AI mesh)
+├── hermes/agents/                # Agent definitions (system prompts + scoped toolsets)
+│   ├── hermaquette-orchestrator/AGENT.md
+│   ├── sculptor/AGENT.md
+│   └── followup/AGENT.md
+├── hermes/skills/hermaquette/    # Skills the agents call (SKILL.md + scripts/)
+│   ├── concept-images/           #   Nano Banana / DALL-E 3
+│   ├── image-to-3d/              #   fal.ai adapter (Hunyuan3D v2)
+│   ├── dfm-repair/               #   verify + repair mesh loop
+│   ├── sculpteo-quote/           #   vendor quote + printability verdict
+│   ├── stripe-checkout/          #   test-mode Stripe Checkout
+│   ├── issuing-gate/             #   governed vendor card gate
+│   └── tracking-qa/              #   GPT-vision delivery QA
+├── hermes/MEMORY.md              # DFM learning store (appended by dfm-repair skill)
+├── packages/image3d/             # fal.ai adapter (Hunyuan3D v2 → Meshy fallback) + budget guard
+├── packages/vendor/              # VendorQuoteAdapter (Sculpteo live/browser/manual)
+├── db/schema.sql                 # SQLite schema (7 tables)
+├── docker-compose.yml            # 4 services + 2 volumes
+├── scripts/demo/                 # Dry-run harness, cache, happy-path toggle
 └── docs/
     ├── runbook-coolify-digitalocean.md
     └── submission.md
