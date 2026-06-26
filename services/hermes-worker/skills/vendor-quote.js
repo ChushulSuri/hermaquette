@@ -7,11 +7,49 @@
  * Computes service fee (10%) and writes the ledger row.
  * Updates spec.quote_status and order.state → 'quote'.
  *
+ * V2: Resolves the STL from payload.stl_url, payload.stl_path, or spec.stl_path
+ * (in that priority order). Handles file:// stripping and HTTP URL download.
+ * Checks Sculpteo printability verdict before returning the quote.
+ *
  * The adapter is dynamically imported so this skill degrades gracefully
  * when the adapter package hasn't been written yet (early dev).
  */
+import { createWriteStream, mkdirSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { pipeline } from 'stream/promises'
 import { nanoid } from 'nanoid'
 import { emitEvent } from '../job-processor.js'
+
+/**
+ * Resolve the STL path from payload and spec, handling file:// and HTTP URLs.
+ * Priority: payload.stl_url → payload.stl_path → spec.stl_path
+ * Returns a local filesystem path ready to pass to the vendor adapter.
+ */
+async function resolveStlPath(orderId, payload, spec) {
+  const rawPath = payload.stl_url || payload.stl_path || spec.stl_path
+  if (!rawPath) throw new Error(`No STL path available for order ${orderId}`)
+
+  // file:// → strip prefix, use local path directly
+  if (rawPath.startsWith('file://')) {
+    return rawPath.slice('file://'.length)
+  }
+
+  // HTTP(S) URL → download to temp file (same pattern as dfm-repair.js)
+  if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+    const tmpDir = join(tmpdir(), 'hermaquette-quote')
+    try { mkdirSync(tmpDir, { recursive: true }) } catch {}
+    const tmpStl = join(tmpDir, `${orderId}_${Date.now()}.stl`)
+    const resp = await fetch(rawPath, { signal: AbortSignal.timeout(60_000) })
+    if (!resp.ok) throw new Error(`Cannot download STL: HTTP ${resp.status} ${rawPath}`)
+    const writer = createWriteStream(tmpStl)
+    await pipeline(resp.body, writer)
+    return tmpStl
+  }
+
+  // Already a local filesystem path
+  return rawPath
+}
 
 export async function vendorQuote(db, orderId, payload) {
   const spec = db.prepare('SELECT * FROM spec WHERE order_id = ?').get(orderId)
@@ -23,7 +61,8 @@ export async function vendorQuote(db, orderId, payload) {
   emitEvent(db, orderId, 'quote', 'progress',
     'Hermes is requesting a vendor quote from Sculpteo…', {})
 
-  const stlPath = payload.stl_path || spec.stl_path
+  // V2: resolve STL from payload.stl_url / payload.stl_path / spec.stl_path
+  const stlPath = await resolveStlPath(orderId, payload, spec)
   const material = spec.material || 'pa12'
 
   // Try the real adapter; fall back to a manual estimate
@@ -38,6 +77,19 @@ export async function vendorQuote(db, orderId, payload) {
       lead_time_days: 7,
       currency: 'usd',
       quote_source: 'manual',
+    }
+  }
+
+  // Printability check — only enforce for live vendor responses, not manual fallback
+  if (quoteResult.quote_source !== 'manual') {
+    const printability = quoteResult.printability ?? quoteResult.status
+    const isPrintable = printability == null ||
+      printability === 'printable' || printability === 'ok'
+    if (!isPrintable) {
+      emitEvent(db, orderId, 'quote', 'printability_failed',
+        `Sculptor mesh rejected by vendor: printability="${printability}"`,
+        { printability, quote_source: quoteResult.quote_source })
+      throw new Error(`Vendor printability check failed: ${printability}`)
     }
   }
 
