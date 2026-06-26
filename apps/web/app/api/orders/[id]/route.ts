@@ -94,7 +94,7 @@ export async function POST(
   const { id } = params
   const db = getDb()
 
-  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(id) as { state: string } | undefined
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(id) as { state: string; checkout_approved?: number; payment_confirmed_at?: number } | undefined
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
   let body: { action?: string; image_id?: string; image_url?: string }
@@ -139,9 +139,14 @@ export async function POST(
   }
 
   if (body.action === 'approve_vendor_checkout') {
-    // Idempotency: already approved
-    if (order.state === 'checkout_approved') {
-      return NextResponse.json({ ok: true, state: 'checkout_approved', idempotent: true })
+    // Idempotency: already approved (check the checkout_approved field, not order.state)
+    if (order.checkout_approved) {
+      return NextResponse.json({ ok: true, state: 'approving_checkout', idempotent: true })
+    }
+
+    // Require payment_confirmed_at — this is what enables the Approve button
+    if (!order.payment_confirmed_at) {
+      return NextResponse.json({ error: 'Payment not confirmed yet' }, { status: 400 })
     }
 
     const vendorOrder = db.prepare('SELECT * FROM vendor_order WHERE order_id=? ORDER BY created_at DESC LIMIT 1')
@@ -149,12 +154,6 @@ export async function POST(
     if (!vendorOrder) return NextResponse.json({ error: 'No vendor order' }, { status: 404 })
     if (vendorOrder.vendor_cost_cents > vendorOrder.spend_cap_cents) {
       return NextResponse.json({ error: 'Cannot approve: over spend cap' }, { status: 400 })
-    }
-
-    // Check payment confirmed (must be set)
-    const orderFull = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as Record<string, unknown>
-    if (!orderFull.payment_confirmed_at) {
-      return NextResponse.json({ error: 'Payment not confirmed yet' }, { status: 400 })
     }
 
     // Atomic: flip checkout_approved=1 (idempotent)

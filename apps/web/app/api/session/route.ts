@@ -41,27 +41,29 @@ export async function GET(req: NextRequest) {
   if (order.state !== 'paid') {
     const now = Date.now()
 
-    // Update ledger
-    db.prepare(`
-      UPDATE ledger SET stripe_session_id=?, stripe_payment_status='paid', updated_at=?
-      WHERE order_id=?
-    `).run(session_id, now, order_id)
+    // Update order state + set payment_confirmed_at (precondition for Approve button)
+    db.prepare('UPDATE orders SET state=?, payment_confirmed_at=?, updated_at=? WHERE id=?')
+      .run('paid', now, now, order_id)
 
-    // Update order state
-    db.prepare('UPDATE orders SET state=?, updated_at=? WHERE id=?')
-      .run('paid', now, order_id)
+    // Update ledger idempotently — ledger row may already exist from vendor-quote (Run 1)
+    const existingLedger = db.prepare('SELECT id FROM ledger WHERE order_id=?').get(order_id)
+    if (existingLedger) {
+      db.prepare("UPDATE ledger SET stripe_session_id=?, stripe_payment_status='paid', updated_at=? WHERE order_id=?")
+        .run(session_id, now, order_id)
+    } else {
+      // Edge case: vendor-quote hasn't run yet — create a minimal ledger row to record the payment
+      const { nanoid } = await import('nanoid')
+      db.prepare(`INSERT INTO ledger (id, order_id, vendor_cost_cents, service_fee_cents, revenue_cents, gross_margin_pre_fees_cents, stripe_session_id, stripe_payment_status, created_at, updated_at) VALUES (?, ?, 0, 0, ?, 0, ?, 'paid', ?, ?)`)
+        .run(nanoid(21), order_id, session.amount_total || 0, session_id, now, now)
+    }
 
-    // Emit event
+    // Emit payment confirmed event
     db.prepare(`
       INSERT INTO events (order_id, stage, event, message, data, created_at)
-      VALUES (?, 'payment', 'confirmed', 'Hermes confirmed payment via Stripe (TEST MODE)', ?, ?)
+      VALUES (?, 'payment', 'confirmed', 'Payment confirmed via Stripe (TEST MODE)', ?, ?)
     `).run(order_id, JSON.stringify({ session_id, amount: session.amount_total }), now)
 
-    // Enqueue checkout gate
-    const { nanoid } = await import('nanoid')
-    const jobId = nanoid(21)
-    db.prepare(`INSERT INTO jobs (id, order_id, stage, status, payload, queued_at) VALUES (?, ?, 'checkout_gate', 'queued', ?, ?)`)
-      .run(jobId, order_id, JSON.stringify({ session_id }), now)
+    // No job enqueue — Run 2 is dispatched by the human Approve button
   }
 
   return NextResponse.json({
