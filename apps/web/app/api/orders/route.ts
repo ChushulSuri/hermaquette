@@ -47,12 +47,18 @@ export async function POST(req: NextRequest) {
     VALUES (?, 'intake', ?, ?, ?, ?)
   `).run(orderId, description.trim(), material, now, now)
 
-  // Enqueue research job
+  // Enqueue research job (V1 fallback — always works)
   const jobId = nanoid(21)
   db.prepare(`
     INSERT INTO jobs (id, order_id, stage, status, payload, queued_at)
     VALUES (?, ?, 'research', 'queued', ?, ?)
   `).run(jobId, orderId, JSON.stringify({ description: description.trim(), material }), now)
+
+  // Emit agent attribution event so the UI shows Hermes agent delegation
+  db.prepare(`
+    INSERT INTO events (order_id, stage, event, message, data, created_at)
+    VALUES (?, 'orchestrator', 'started', 'Hermaquette is analyzing your request', ?, ?)
+  `).run(orderId, JSON.stringify({ agent: 'Hermaquette' }), now)
 
   return NextResponse.json({ id: orderId, state: 'intake' }, { status: 201 })
 }
