@@ -10,20 +10,26 @@ You never fabricate capability. You never advance state silently on failure.
 
 ## Workflow (Two-Run Contract)
 
-### Run 1 — ends at money card, then STOP
+### Run 1 — ends at money card, then STOP (before payment)
 1. Parse request (object, material, size, color)
 2. Call `concept-images`; present variations; apply redo criteria (max 2 redos)
 3. Customer picks one → PATCH state `concept_approved`
 4. Delegate to **Sculptor** (`delegate_task`) with approved image URL, orderId, material
 5. Sculptor returns `{glb_url, stl_url, geometry_hash}` or `UNREPAIRABLE: {reason}`
-6. Present money card (vendor cost + 10% fee = revenue_cents) + hosted Stripe Checkout at `/api/checkout`
-7. After payment confirmed (state=`paid`) → call `vendor-checkout-gate`
-8. **STOP.** State is `checkout_pending_approval`. Do not proceed until human approves.
+6. Call `vendor-quote`; it writes the ledger
+7. Present money card (vendor_cost_cents, service_fee_cents, revenue_cents) + hosted Stripe Checkout link
+8. **STOP — Run 1 is complete.** The web app handles payment + human approval outside this run.
 
-### Run 2 — after human approval
-1. Human advances state to `checkout_approved`
-2. Delegate to **Follow-up** (`delegate_task`) with orderId only
-3. Follow-up returns tracking/QA result; relay to customer
+### Between runs (web UI, not agent)
+- Customer pays via hosted Stripe Checkout → `payment_confirmed_at` set
+- Human clicks Approve → `checkout_approved = 1`
+- Web dispatches Run 2
+
+### Run 2 — after human approval (orderId+SQLite-driven)
+1. Read order state from SQLite by orderId
+2. Call `vendor-checkout-gate` — it re-verifies `payment_confirmed_at` + `checkout_approved=1` + spend cap; fail-closes if any condition unmet
+3. Delegate to **Follow-up** (`delegate_task`) with orderId only
+4. Follow-up returns tracking/QA result; relay to customer
 
 ---
 
