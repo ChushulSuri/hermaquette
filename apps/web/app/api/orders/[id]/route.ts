@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb, requireDemoToken } from '@/lib/db'
-import { nanoid } from 'nanoid'
 import fs from 'fs'
 import path from 'path'
+
+const HERMES_URL = (process.env.HERMES_GATEWAY_URL || 'http://hermes-agent:8642').replace('/v1', '')
+const HERMES_KEY = process.env.HERMES_API_KEY || 'hermaquette-local'
 
 export async function GET(
   req: NextRequest,
@@ -124,20 +126,14 @@ export async function POST(
     }
 
     const now = Date.now()
+    // Update spec with approved image
     db.prepare('UPDATE spec SET approved_image_id=?, updated_at=? WHERE order_id=?')
       .run(body.image_id, now, id)
     db.prepare('UPDATE orders SET state=?, updated_at=? WHERE id=?')
       .run('concept_approved', now, id)
-
-    const jobId = nanoid(21)
-    // V2: enqueue image-to-3d (fal.ai full-color figure); V1 geometry (relief) is dead in V2
-    // image_url must be HTTP-accessible (fal.ai calls it); conceptPath is for local cad-dfm only
-    db.prepare(`INSERT INTO jobs (id, order_id, stage, status, payload, queued_at) VALUES (?, ?, 'image-to-3d', 'queued', ?, ?)`)
-      .run(jobId, id, JSON.stringify({
-        image_url: body.image_url,
-        approved_image_id: body.image_id,
-        approved_image_path: conceptPath,
-      }), now)
+    // Emit event so agent can see approval
+    db.prepare("INSERT INTO events (order_id, stage, event, message, data, created_at) VALUES (?, 'concept', 'concept_approved', ?, ?, ?)")
+      .run(id, 'Customer approved concept image', JSON.stringify({ image_id: body.image_id, image_url: body.image_url }), now)
 
     return NextResponse.json({ ok: true, state: 'concept_approved' })
   }
@@ -147,13 +143,6 @@ export async function POST(
     if (order.state === 'checkout_approved') {
       return NextResponse.json({ ok: true, state: 'checkout_approved', idempotent: true })
     }
-    // Idempotency: job already enqueued/running (duplicate click before worker picks it up)
-    const pendingJob = db.prepare(
-      "SELECT id FROM jobs WHERE order_id=? AND stage='checkout_approve' AND status IN ('queued','running')"
-    ).get(id) as { id: string } | undefined
-    if (pendingJob) {
-      return NextResponse.json({ ok: true, state: order.state, idempotent: true })
-    }
 
     const vendorOrder = db.prepare('SELECT * FROM vendor_order WHERE order_id=? ORDER BY created_at DESC LIMIT 1')
       .get(id) as { id: string; vendor_cost_cents: number; spend_cap_cents: number } | undefined
@@ -162,9 +151,38 @@ export async function POST(
       return NextResponse.json({ error: 'Cannot approve: over spend cap' }, { status: 400 })
     }
 
-    const jobId = nanoid(21)
-    db.prepare(`INSERT INTO jobs (id, order_id, stage, status, payload, queued_at) VALUES (?, ?, 'checkout_approve', 'queued', ?, ?)`)
-      .run(jobId, id, JSON.stringify({ vendor_order_id: vendorOrder.id, approved: true }), Date.now())
+    // Check payment confirmed (must be set)
+    const orderFull = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as Record<string, unknown>
+    if (!orderFull.payment_confirmed_at) {
+      return NextResponse.json({ error: 'Payment not confirmed yet' }, { status: 400 })
+    }
+
+    // Atomic: flip checkout_approved=1 (idempotent)
+    db.prepare('UPDATE orders SET checkout_approved = 1, updated_at = ? WHERE id = ? AND checkout_approved = 0')
+      .run(Date.now(), id)
+
+    // Dispatch Run 2
+    const run2Input = `orderId: ${id}
+Payment confirmed and spend approved by human. Please perform the governed vendor checkout:
+1. Run: node /hermes/skills/hermaquette/vendor-checkout-gate/scripts/run.js ${id}
+2. Then delegate Follow-up agent.`
+
+    try {
+      const runRes = await fetch(`${HERMES_URL}/v1/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${HERMES_KEY}` },
+        body: JSON.stringify({ input: run2Input }),
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (runRes.ok) {
+        const runData = await runRes.json() as { run_id: string }
+        db.prepare('UPDATE orders SET run2_run_id = ?, updated_at = ? WHERE id = ?')
+          .run(runData.run_id, Date.now(), id)
+      }
+    } catch (err) {
+      console.error('[approve] Run 2 dispatch failed:', err)
+      // State is already approved — Run 2 can be retried
+    }
 
     return NextResponse.json({ ok: true, state: 'approving_checkout' })
   }
