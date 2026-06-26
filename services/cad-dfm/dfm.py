@@ -235,14 +235,47 @@ def run_dfm(stl_path: str, params: dict) -> dict:
     }
 
 
+def run_dfm_ai_mesh(stl_path: str) -> dict:
+    """
+    Run DFM checks on an arbitrary AI-generated mesh.
+    Unlike run_dfm(), this does NOT check build123d config params.
+    Uses mesh_repair.repair_mesh() and maps result to DFM status.
+    """
+    from mesh_repair import repair_mesh
+
+    result = repair_mesh(stl_path)
+
+    # Map repair result to DFM output format
+    status_map = {"PASS": "PASS", "FIXABLE": "FIXABLE", "BLOCKED": "BLOCKED"}
+    dfm_status = status_map.get(result["status"], "NEEDS_REVIEW")
+
+    return {
+        "status": dfm_status,
+        "reason": result["reason"],
+        "applied_repairs": result["applied_repairs"],
+        "mesh_checks": result["mesh_checks"],
+        "repaired_stl_path": result.get("repaired_stl_path"),
+        "original_stats": result.get("original_stats", {}),
+        "failures": [],
+        "warnings": [],
+        "material_recommendation": "pa12",
+        "material_reason": "PA12 SLS recommended for structural rigidity",
+    }
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--stl", required=True)
     parser.add_argument("--params", default="{}")
+    parser.add_argument("--mode", default="params", choices=["params", "ai_mesh"])
     args = parser.parse_args()
 
-    params = json.loads(args.params)
-    result = run_dfm(args.stl, params)
+    if args.mode == "ai_mesh":
+        result = run_dfm_ai_mesh(args.stl)
+    else:
+        params = json.loads(args.params)
+        result = run_dfm(args.stl, params)
+
     print(json.dumps(result))
 
     # Always exit 0 — BLOCKED/NEEDS_REVIEW are valid DFM results, not Python errors.

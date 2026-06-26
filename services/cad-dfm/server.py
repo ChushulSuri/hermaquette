@@ -88,3 +88,19 @@ async def run_dfm(req: DFMRequest):
         "--stl", req.stl_path,
         "--params", json.dumps(req.params),
     ], timeout=120)
+
+
+class AIMeshDFMRequest(BaseModel):
+    stl_path: str
+
+
+@app.post("/dfm/ai-mesh")
+async def dfm_ai_mesh(req: AIMeshDFMRequest):
+    """Run DFM check on an AI-generated mesh (no build123d params)."""
+    proc = subprocess.run(
+        [sys.executable, "dfm.py", "--stl", req.stl_path, "--mode", "ai_mesh"],
+        capture_output=True, text=True, cwd=Path(__file__).parent
+    )
+    if proc.returncode != 0 and not proc.stdout:
+        raise HTTPException(status_code=500, detail=proc.stderr)
+    return json.loads(proc.stdout)
