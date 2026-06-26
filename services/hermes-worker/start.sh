@@ -83,14 +83,6 @@ if [ -d /hermes/skills/hermaquette ]; then
   echo "[start] Linked hermaquette skills"
 fi
 
-# ── Start primary Hermes gateway (port 8642) ──────────────────────────────────
-echo "[start] Starting primary Hermes gateway ($_hermes_model) on port 8642..."
-API_SERVER_ENABLED=true \
-API_SERVER_KEY="${HERMES_API_KEY:-hermaquette-local}" \
-API_SERVER_PORT=8642 \
-API_SERVER_HOST=127.0.0.1 \
-hermes gateway &
-
 # ── Start Nemotron Hermes gateway (port 8643) — only when key is available ────
 NEMOTRON_GW_STARTED=0
 if [ -n "${NEMOTRON_API_KEY}" ]; then
@@ -107,18 +99,6 @@ else
   echo "[start] NEMOTRON_API_KEY not set — Nemotron steps will fall back to primary gateway"
 fi
 
-# ── Wait for primary gateway ──────────────────────────────────────────────────
-READY=0
-for i in $(seq 1 30); do
-  if curl -sf http://127.0.0.1:8642/health > /dev/null 2>&1; then
-    READY=1
-    echo "[start] Primary gateway ready after ${i}s"
-    break
-  fi
-  sleep 1
-done
-[ "$READY" -eq 0 ] && echo "[start] WARNING: primary gateway did not start in 30s"
-
 # ── Wait for Nemotron gateway ─────────────────────────────────────────────────
 if [ "$NEMOTRON_GW_STARTED" -eq 1 ]; then
   for i in $(seq 1 30); do
@@ -130,5 +110,19 @@ if [ "$NEMOTRON_GW_STARTED" -eq 1 ]; then
   done
 fi
 
-echo "[start] Starting Node.js worker..."
-exec node worker.js
+# ── Write Hermaquette identity files ─────────────────────────────────────────
+echo "[start] Writing SOUL.md and AGENTS.md..."
+mkdir -p /root/.hermes
+cp /hermes/SOUL.md /root/.hermes/SOUL.md
+mkdir -p "${TERMINAL_CWD:-/app}"
+cp /hermes/AGENTS.md "${TERMINAL_CWD:-/app}/AGENTS.md"
+echo "[start] SOUL.md written to /root/.hermes/SOUL.md"
+echo "[start] AGENTS.md written to ${TERMINAL_CWD:-/app}/AGENTS.md"
+
+echo "[start] Starting Hermaquette agent (native Hermes, PID 1)..."
+exec \
+  API_SERVER_ENABLED=true \
+  API_SERVER_KEY="${HERMES_API_KEY:-hermaquette-local}" \
+  API_SERVER_PORT=8642 \
+  API_SERVER_HOST=0.0.0.0 \
+  hermes gateway

@@ -23,9 +23,13 @@ COPY db/ /db/
 # Copy hermaquette skills + initial MEMORY.md
 # (hermes/ is also bind-mounted at runtime for lesson persistence)
 COPY hermes/ /hermes/
+COPY hermes/SOUL.md /hermes/SOUL.md
+COPY hermes/AGENTS.md /hermes/AGENTS.md
 
 # Hermes home: skills dir pre-created; config written by start.sh at runtime
 RUN mkdir -p /root/.hermes/skills
+
+ENV TERMINAL_CWD=/app
 
 RUN chmod +x /app/start.sh
 
