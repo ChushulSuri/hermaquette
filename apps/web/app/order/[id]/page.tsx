@@ -202,13 +202,7 @@ export default function OrderPage({ params, searchParams }: PageProps) {
             </div>
           </div>
 
-          {glbUrl ? (
-            <ModelViewerSection glbUrl={glbUrl} orderId={params.id} />
-          ) : (
-            <div className="bg-gray-900 border border-gray-700 rounded-xl h-40 flex items-center justify-center text-gray-500 text-sm">
-              3D model generating...
-            </div>
-          )}
+          <ModelViewerSection glbUrl={glbUrl} orderId={params.id} orderState={order.state} />
 
           {/* DFM result */}
           {dfmReport && (

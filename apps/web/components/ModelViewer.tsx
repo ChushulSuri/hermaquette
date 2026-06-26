@@ -5,6 +5,7 @@ interface ModelViewerProps {
   glbUrl: string
   alt?: string
   className?: string
+  environmentImage?: string
 }
 
 // Declare the model-viewer custom element type
@@ -19,6 +20,7 @@ declare global {
           'auto-rotate'?: boolean | string
           'shadow-intensity'?: string
           exposure?: string
+          'environment-image'?: string
           style?: React.CSSProperties
         },
         HTMLElement
@@ -27,7 +29,7 @@ declare global {
   }
 }
 
-export function ModelViewer({ glbUrl, alt = '3D model preview', className = '' }: ModelViewerProps) {
+export function ModelViewer({ glbUrl, alt = '3D model preview', className = '', environmentImage }: ModelViewerProps) {
   const scriptLoaded = useRef(false)
 
   useEffect(() => {
@@ -56,6 +58,7 @@ export function ModelViewer({ glbUrl, alt = '3D model preview', className = '' }
         auto-rotate="true"
         shadow-intensity="1"
         exposure="1"
+        environment-image={environmentImage}
         style={{
           width: '100%',
           height: '400px',

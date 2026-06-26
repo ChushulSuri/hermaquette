@@ -1,6 +1,7 @@
 'use client'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { AgentBadge } from '@/components/AgentBadge'
 
 interface Event {
   id: number
@@ -69,6 +70,7 @@ export function EventTimeline({ events, orderId }: EventTimelineProps) {
           <div className="flex-1 min-w-0">
             <span className="text-gray-300">{evt.message}</span>
             <span className="text-gray-600 text-xs ml-2">[{evt.stage}:{evt.event}]</span>
+            <AgentBadge agent={(() => { try { return JSON.parse(evt.data)?.agent } catch { return undefined } })()} />
           </div>
         </div>
       ))}
