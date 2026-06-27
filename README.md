@@ -185,6 +185,14 @@ hermaquette/
 
 See `docs/runbook-coolify-digitalocean.md` for the full Coolify + DigitalOcean VPS deployment guide.
 
+> **Note:** `hermes-runtime/` is a git submodule. Clone with `git clone --recurse-submodules`, or run `git submodule update --init` after cloning, or the Hermes runtime build will fail.
+
+## License
+
+This project's own code is released under the [MIT License](./LICENSE) © 2026 Chushul Suri.
+
+The `hermes-runtime/` directory is a git submodule referencing [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) and remains under its own upstream license — it is not relicensed by this repository.
+
 ---
 
 *Built for the Hermes Hackathon 2026. Deadline: EOD 2026-06-30.*
