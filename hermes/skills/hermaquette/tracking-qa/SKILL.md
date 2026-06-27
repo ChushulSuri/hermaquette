@@ -12,9 +12,8 @@ metadata:
 # Skill: tracking-qa
 
 **Stage**: `tracking_qa`
-**Service**: hermes-worker
-**Handler**: `services/hermes-worker/skills/tracking-qa.js` *(not yet implemented — roadmap)*
-**Status**: Scaffold — implementation deferred (cut-first per the V2 cut ladder)
+**Service**: hermes-agent
+**Script**: `node /hermes/skills/hermaquette/tracking-qa/scripts/run.js <orderId>`
 
 > When implemented, follow the schema in `hermes/agents/followup/AGENT.md` (canonical): inputs `tracking_status`, `delivery_photo_url`; QA output `{ qa_result: "pass"|"mismatch", confidence, issues, comparison_notes }`. **Compare form/shape, NOT color** (prints are single-color; the concept image is full-color). Drafts are `pending_approval` and never auto-sent.
 

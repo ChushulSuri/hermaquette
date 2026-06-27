@@ -33,7 +33,7 @@ services:
   hermes-agent:
     build:
       context: .
-      dockerfile: services/hermes-worker/Dockerfile
+      dockerfile: services/hermes-agent/Dockerfile
     environment:
       - SQLITE_PATH=/data/hermaquette.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -57,7 +57,7 @@ services:
       - TERMINAL_CWD=/app
       # Hermes gateways (started by start.sh inside this container)
       # Port 8642: primary (GPT-5.5/ChatGPT OAuth)  Port 8643: Nemotron (NVIDIA)
-      - HERMES_API_KEY=${HERMES_API_KEY:-hermaquette-dev}
+      - HERMES_API_KEY=${HERMES_API_KEY:-hermaquette-local}
       - HERMES_LLM_PROVIDER=${HERMES_LLM_PROVIDER:-openai}
       - HERMES_LLM_MODEL=${HERMES_LLM_MODEL:-gpt-5.5}
       - HERMES_LLM_MODEL_API_FALLBACK=${HERMES_LLM_MODEL_API_FALLBACK:-gpt-4o}

@@ -21,7 +21,7 @@ You do NOT have access to `vendor-quote`, `vendor-checkout-gate`, `concept-image
 
 ### Step 1 — Generate the colored 3D model
 
-Call `image-to-3d` with the approved concept image URL. (Material is carried on the order/spec and used downstream at quote time; `image-to-3d` itself only needs the image.) The model is generated **textured in one shot** (no separate texturing pass).
+Call `image-to-3d` with the orderId. (Material and image_url are read from SQLite by the script — never passed as argv.) The model is generated **textured in one shot** (no separate texturing pass).
 
 The skill returns:
 ```json
@@ -37,7 +37,7 @@ The skill returns:
 
 ### Step 2 — Run DFM repair (bounded)
 
-Call `dfm-repair` with the `stl_url`. It runs a **deterministic repair macro** (`fill_holes → make_watertight → remove_small_components → rescale → decimate`) — you do not choose the operations.
+Call `dfm-repair` with the orderId and attempt number. (stl_url is read from SQLite by the script — never passed as argv.) It runs a **deterministic repair macro** (`fill_holes → make_watertight → remove_small_components → rescale → decimate`) — you do not choose the operations.
 
 The skill returns:
 ```json

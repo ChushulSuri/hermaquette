@@ -12,8 +12,8 @@ metadata:
 # Skill: vendor-quote
 
 **Stage**: `quote`
-**Service**: hermes-worker
-**Handler**: `services/hermes-worker/skills/vendor-quote.js`
+**Service**: hermes-agent
+**Script**: `node /hermes/skills/hermaquette/vendor-quote/scripts/run.js <orderId>`
 **Calls**: `packages/vendor/adapter.js` (dynamic import, graceful fallback)
 
 ## Description
@@ -25,21 +25,16 @@ before Stripe checkout is initiated.
 
 ## Trigger
 
-A `jobs` row with `stage='quote'` and `status='queued'`, enqueued by **`dfm-repair` on PASS** (V2 full-3D path). (The legacy `dfm-gate` relief path also enqueues `quote`, but it is superseded.)
-
-## Input (job.payload)
-
-```json
-{
-  "stl_url": "file://<repaired_stl_path>",
-  "geometry_hash": "<sha256>"
-}
+Called by the orchestrator agent after DFM PASS. The agent runs:
 ```
-`vendor-quote` resolves the STL via `resolveStlPath` (payload `stl_url` → `spec.stl_path`), supporting both `file://` (repaired mesh on the shared volume) and `https://` URLs.
+node /hermes/skills/hermaquette/vendor-quote/scripts/run.js <orderId>
+```
 
-Falls back to `spec.stl_path` if not in payload.
+## Input (argv)
 
-## Output (job.result)
+orderId (string) — reads spec from SQLite by orderId.
+
+## Output (stdout JSON)
 
 ```json
 {

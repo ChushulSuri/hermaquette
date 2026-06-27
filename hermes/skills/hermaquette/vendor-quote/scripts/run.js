@@ -14,7 +14,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { pipeline } from 'stream/promises'
 import { nanoid } from 'nanoid'
-import { getDb, emitEvent } from '../_shared/db.js'
+import { getDb, emitEvent } from '../../_shared/db.js'
 
 const SPEND_CAP_CENTS = parseInt(process.env.SPEND_CAP_CENTS || '5000')
 

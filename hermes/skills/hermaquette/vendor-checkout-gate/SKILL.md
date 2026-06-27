@@ -12,56 +12,57 @@ metadata:
 # Skill: vendor-checkout-gate
 
 **Stage**: `checkout_gate`
-**Service**: hermes-worker
-**Handler**: `services/hermes-worker/skills/vendor-checkout-gate.js`
-**Exports**: `approveVendorCheckout(db, orderId)` — called by web API
+**Service**: hermes-agent
+**Script**: `node /hermes/skills/hermaquette/vendor-checkout-gate/scripts/run.js <orderId>`
 
 ## Description
 
-Governance gate before any real vendor spend. Evaluates the vendor cost against the
-configured spend cap, creates a `vendor_order` record, and either blocks or requests
-human approval via the UI.
+Governance gate before any real vendor spend. Fail-closed: ALL three conditions must be true to proceed:
+1. `payment_confirmed_at IS NOT NULL` (payment confirmed)
+2. `checkout_approved = 1` (human approved — not checkout_pending_approval)
+3. `vendor_cost_cents <= SPEND_CAP_CENTS` (within cap)
+
+If any condition fails: writes `checkout_blocked` event + exits 1 (no Issuing card created).
+If all pass: demonstrates (never executes) a test-mode Stripe Issuing virtual card.
 
 **Stripe Issuing integration** (optional): when `STRIPE_ISSUING_ENABLED=true`, the
-`approveVendorCheckout()` function issues a test-mode virtual card scoped to shipping
-merchants with a per-authorization cap. The card is NEVER automatically charged or submitted
-to the vendor — that requires a separate explicit step.
+script issues a test-mode virtual card scoped to shipping merchants with a per-authorization cap.
+The card is NEVER automatically charged or submitted to the vendor.
 
 ## Trigger
 
-A `jobs` row with `stage='checkout_gate'` and `status='queued'`, created by ledger-payment.
-
-## Input (job.payload)
-
-```json
-{}
+Called by the orchestrator agent during Run 2 (after human approval). The agent runs:
 ```
-All data is read from the `ledger` row.
+node /hermes/skills/hermaquette/vendor-checkout-gate/scripts/run.js <orderId>
+```
 
-## Output (job.result)
+## Input (argv)
+
+orderId (string) — the order to evaluate.
+
+## Output (stdout JSON)
 
 ```json
 {
-  "status": "blocked | pending_approval",
-  "vendor_order_id": "nano-id",
-  "reason": "over_spend_cap"
+  "status": "ok",
+  "spend_path": "issuing | sqlite",
+  "card_id": "card_xxx | null",
+  "executed": false,
+  "vendor_cost_cents": 3200,
+  "spend_cap_cents": 5000
 }
 ```
 
 ## Approval flow
 
 ```
-checkout_gate job runs
-  → status=pending_approval
-  → order.state = 'checkout_pending_approval'
-  → events: awaiting_approval
-
-Human reviews in UI → calls POST /orders/:id/approve
-  → web API calls approveVendorCheckout(db, orderId)
-  → optionally issues Stripe Issuing virtual card
-  → vendor_order.status = 'approved'
-  → order.state = 'checkout_approved'
-  → events: approved
+Run 1: vendor-quote writes ledger → money card presented → STOP
+Customer pays via Stripe Checkout → payment_confirmed_at set
+Human clicks Approve → checkout_approved = 1 (atomic flip)
+Run 2 dispatched → agent runs vendor-checkout-gate
+  → re-verifies payment_confirmed_at + checkout_approved + cap (fail-closed)
+  → demonstrates test Issuing card (never executes)
+  → delegates Follow-up agent
 ```
 
 ## Environment variables

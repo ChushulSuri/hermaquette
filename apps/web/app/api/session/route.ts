@@ -37,8 +37,9 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // Idempotent: only update if not already marked paid
-  if (order.state !== 'paid') {
+  // Idempotent: only update if NOT already in a paid-or-later state
+  // Never regress from later states (approving_checkout, checkout_approved)
+  if (!['paid', 'approving_checkout', 'checkout_approved'].includes(order.state)) {
     const now = Date.now()
 
     // Update order state + set payment_confirmed_at (precondition for Approve button)
@@ -57,11 +58,14 @@ export async function GET(req: NextRequest) {
         .run(nanoid(21), order_id, session.amount_total || 0, session_id, now, now)
     }
 
-    // Emit payment confirmed event
-    db.prepare(`
-      INSERT INTO events (order_id, stage, event, message, data, created_at)
-      VALUES (?, 'payment', 'confirmed', 'Payment confirmed via Stripe (TEST MODE)', ?, ?)
-    `).run(order_id, JSON.stringify({ session_id, amount: session.amount_total }), now)
+    // Emit payment confirmed event (dedup: skip if same order+event already exists)
+    const existingEvent = db.prepare("SELECT id FROM events WHERE order_id = ? AND event = 'confirmed' LIMIT 1").get(order_id)
+    if (!existingEvent) {
+      db.prepare(`
+        INSERT INTO events (order_id, stage, event, message, data, created_at)
+        VALUES (?, 'payment', 'confirmed', 'Payment confirmed via Stripe (TEST MODE)', ?, ?)
+      `).run(order_id, JSON.stringify({ session_id, amount: session.amount_total }), now)
+    }
 
     // No job enqueue — Run 2 is dispatched by the human Approve button
   }

@@ -43,11 +43,17 @@ export function getDb(): Database.Database {
   for (const candidate of schemaCandidates) {
     if (fs.existsSync(candidate)) {
       const schema = fs.readFileSync(candidate, 'utf-8')
+      // Strip comment lines (lines starting with --) BEFORE splitting on ';',
+      // so that CREATE TABLE statements preceded by comments aren't dropped.
+      const schemaClean = schema
+        .split('\n')
+        .filter(line => !line.trimStart().startsWith('--'))
+        .join('\n')
       // Run each statement separately (better-sqlite3 doesn't support multi-statement exec)
-      const statements = schema
+      const statements = schemaClean
         .split(';')
         .map(s => s.trim())
-        .filter(s => s.length > 0 && !s.startsWith('--'))
+        .filter(s => s.length > 0)
       for (const stmt of statements) {
         try {
           db.exec(stmt)
@@ -62,6 +68,21 @@ export function getDb(): Database.Database {
 
   if (!schemaApplied) {
     console.warn('[hermaquette/db] schema.sql not found — skipping schema init')
+  }
+
+  // ── Agentic cutover migration: add columns to orders table ──────────────────
+  // SQLite does NOT support ADD COLUMN IF NOT EXISTS, so we catch "duplicate
+  // column name" errors. Each statement runs in its own try/catch.
+  const agenticColumns = [
+    "ALTER TABLE orders ADD COLUMN run_id TEXT",
+    "ALTER TABLE orders ADD COLUMN run1_response_id TEXT",
+    "ALTER TABLE orders ADD COLUMN run2_run_id TEXT",
+    "ALTER TABLE orders ADD COLUMN payment_confirmed_at INTEGER",
+    "ALTER TABLE orders ADD COLUMN checkout_approved INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE spec ADD COLUMN approved_image_url TEXT",
+  ]
+  for (const col of agenticColumns) {
+    try { db.exec(col) } catch { /* duplicate column — already applied */ }
   }
 
   _db = db

@@ -42,15 +42,6 @@ interface Ledger {
   stripe_payment_status?: string
 }
 
-interface VendorOrder {
-  status?: string
-  vendor_cost_cents?: number
-  spend_cap_cents?: number
-  issuing_card_id?: string
-  spend_path?: string
-  executed?: number
-}
-
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -59,6 +50,7 @@ function getStateBadge(state: string): { label: string; color: string; descripti
     intake: { label: 'Intake', color: 'bg-gray-700', description: 'Processing your request...' },
     research_done: { label: 'Researching', color: 'bg-blue-900', description: 'Hermes researched references' },
     concept: { label: 'Concept', color: 'bg-purple-900 border border-purple-500', description: 'Select a concept direction' },
+    geometry_pending: { label: 'Building...', color: 'bg-indigo-900', description: 'Hermes is building geometry' },
     concept_approved: { label: 'Building...', color: 'bg-indigo-900', description: 'Hermes is building geometry' },
     preview: { label: 'Preview', color: 'bg-indigo-800 border border-indigo-400', description: 'Interactive 3D preview' },
     manufacturable: { label: 'Manufacturable ✓', color: 'bg-green-900 border border-green-500', description: 'DFM passed — getting quote' },
@@ -80,7 +72,6 @@ export default function OrderPage({ params, searchParams }: PageProps) {
 
   const spec = db.prepare('SELECT * FROM spec WHERE order_id=?').get(params.id) as Spec | undefined
   const ledger = db.prepare('SELECT * FROM ledger WHERE order_id=?').get(params.id) as Ledger | undefined
-  const vendorOrder = db.prepare('SELECT * FROM vendor_order WHERE order_id=? ORDER BY created_at DESC LIMIT 1').get(params.id) as VendorOrder | undefined
 
   const events = db.prepare(`
     SELECT id, stage, event, message, data, created_at
@@ -101,11 +92,11 @@ export default function OrderPage({ params, searchParams }: PageProps) {
   }
 
   const badge = getStateBadge(order.state)
-  const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(order.state)
-  const showConceptGallery = order.state === 'concept' && conceptImages.length > 0
+  const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved', 'geometry_pending'].includes(order.state)
+  const showConceptGallery = (order.state === 'concept' || order.state === 'geometry_pending') && conceptImages.length > 0
   const showMoneyCard = ledger && ['quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(order.state)
   const showPayButton = order.state === 'quote' && ledger
-  const showVendorApproval = ['checkout_pending_approval'].includes(order.state) && vendorOrder
+  const showVendorApproval = order.state === 'paid' && ledger
 
   // GLB URL
   const artifactsDir = process.env.ARTIFACTS_DIR || '/artifacts'
@@ -250,28 +241,19 @@ export default function OrderPage({ params, searchParams }: PageProps) {
       )}
 
       {/* Vendor Approval */}
-      {showVendorApproval && vendorOrder && (
+      {showVendorApproval && ledger && (
         <div className="mb-6">
-          <VendorApprovalPanel orderId={params.id} currency={ledger?.currency} vendorOrder={vendorOrder} />
+          <VendorApprovalPanel orderId={params.id} currency={ledger.currency} vendorCostCents={ledger.vendor_cost_cents} spendCapCents={parseInt(process.env.SPEND_CAP_CENTS || '5000')} />
         </div>
       )}
 
       {/* Checkout Approved */}
-      {order.state === 'checkout_approved' && vendorOrder && (
+      {order.state === 'checkout_approved' && (
         <div className="bg-teal-900/30 border border-teal-700 rounded-xl p-6 mb-6">
           <p className="text-teal-300 font-semibold mb-2">✓ Governed checkout approved</p>
-          {vendorOrder.spend_path === 'issuing' && vendorOrder.issuing_card_id ? (
-            <p className="text-teal-400 text-sm">
-              <span className="text-amber-300 font-mono">Stripe Issuing</span> virtual card issued (cap: ${((vendorOrder.spend_cap_cents || 5000) / 100).toFixed(2)}).
-              Card ID: <span className="font-mono text-xs">{vendorOrder.issuing_card_id.slice(0, 16)}…</span>
-              <br />
-              <span className="text-gray-400">Card is NEVER charged — execution gated until shipping address provided.</span>
-            </p>
-          ) : (
-            <p className="text-teal-400 text-sm">
-              Governed approval record created (SQLite path). Execution gated until shipping address provided.
-            </p>
-          )}
+          <p className="text-teal-400 text-sm">
+            Governed approval record created (SQLite path). Execution gated until shipping address provided.
+          </p>
           <div className="mt-4 p-3 bg-teal-900/50 rounded-lg border border-teal-800">
             <p className="text-white font-medium text-sm">Want the totem?</p>
             <p className="text-gray-300 text-sm mt-1">
@@ -281,6 +263,26 @@ export default function OrderPage({ params, searchParams }: PageProps) {
           </div>
           <p className="text-xs text-gray-500 mt-3">
             One-off personal gift · Not for resale · No affiliation or endorsement claimed
+          </p>
+        </div>
+      )}
+
+      {/* Checkout Approving — in progress, not yet approved */}
+      {order.state === 'approving_checkout' && (
+        <div className="bg-amber-900/30 border border-amber-700 rounded-xl p-6 mb-6">
+          <p className="text-amber-300 font-semibold mb-2">⏳ Approving checkout…</p>
+          <p className="text-amber-400 text-sm">
+            Vendor checkout gate is running. Approval will appear here once the gate confirms.
+          </p>
+        </div>
+      )}
+
+      {/* Checkout Blocked — gate rejected */}
+      {order.state === 'checkout_blocked' && (
+        <div className="bg-red-900/30 border border-red-700 rounded-xl p-6 mb-6">
+          <p className="text-red-300 font-semibold mb-2">✗ Checkout blocked</p>
+          <p className="text-red-400 text-sm">
+            The vendor checkout gate rejected this order. Check the event log for details.
           </p>
         </div>
       )}

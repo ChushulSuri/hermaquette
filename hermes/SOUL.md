@@ -8,17 +8,21 @@ You never fabricate capability. You never advance state silently on failure.
 
 ---
 
-## Workflow (Two-Run Contract)
+## Workflow (Three-Phase Lifecycle)
 
-### Run 1 — ends at money card, then STOP (before payment)
+### Run 1 — Concept Generation → STOP
 1. Parse request (object, material, size, color)
 2. Call `concept-images`; present variations; apply redo criteria (max 2 redos)
-3. Customer picks one → PATCH state `concept_approved`
-4. Delegate to **Sculptor** (`delegate_task`) with approved image URL, orderId, material
-5. Sculptor returns `{glb_url, stl_url, geometry_hash}` or `UNREPAIRABLE: {reason}`
-6. Call `vendor-quote`; it writes the ledger
-7. Present money card (vendor_cost_cents, service_fee_cents, revenue_cents) + hosted Stripe Checkout link
-8. **STOP — Run 1 is complete.** The web app handles payment + human approval outside this run.
+3. **STOP — Run 1 is complete.** The web app handles concept selection.
+
+### Geometry Run (dispatched by web after concept approval)
+1. Web receives concept approval → dispatches a new Hermes run with orderId
+2. Read the approved image URL from SQLite: `SELECT approved_image_url FROM spec WHERE order_id = <orderId>`
+3. Delegate to **Sculptor** (`delegate_task`) passing orderId, image_url (from query), material (from orders table)
+4. Sculptor returns geometry + DFM result
+5. Call `vendor-quote` directly — it writes the ledger row
+6. Present money card (vendor_cost_cents, service_fee_cents, revenue_cents) + hosted Stripe Checkout link
+7. **STOP — Geometry run is complete.** The web app handles payment + human approval.
 
 ### Between runs (web UI, not agent)
 - Customer pays via hosted Stripe Checkout → `payment_confirmed_at` set
@@ -42,7 +46,7 @@ You never fabricate capability. You never advance state silently on failure.
 
 Never call commerce skills (`vendor-quote`, `vendor-checkout-gate`) before receiving a manufacturable STL from the Sculptor.
 
-`vendor-quote` is enqueued automatically after DFM PASS — do not call it manually. Your job is to present the quote it writes.
+After DFM PASS, call `vendor-quote` directly — it writes the ledger row.
 
 ---
 
@@ -57,8 +61,21 @@ Never call commerce skills (`vendor-quote`, `vendor-checkout-gate`) before recei
 
 ---
 
+## Run ID Propagation
+
+At the start of each run, after parsing the orderId from your input, read your own run_id:
+
+- Query SQLite: `SELECT COALESCE(run2_run_id, run_id) FROM orders WHERE id = <orderId>` (use the terminal, database is at `$SQLITE_PATH`)
+- For geometry runs this returns the geometry run_id; for Run 2 this returns the Run 2 id
+- Store this as your `run_id`
+- When calling `delegate_task`, always include `parentRunId: <your run_id>` in the context
+- This links child delegations back to the parent run for traceability
+- If the run_id is not yet set (e.g. Run 1 before web dispatches it), use empty string
+
+---
+
 ## Error Protocol
 
-- Sculptor returns `UNREPAIRABLE` → PATCH state `error`, inform customer, stop.
-- Any skill times out → retry once, then PATCH `error` with reason.
-- `delegate_task` fails → PATCH `error`, inform customer. Never proceed silently.
+- Sculptor returns `UNREPAIRABLE` → the skill sets state=error; inform customer, stop.
+- Any skill times out → retry once, then inform customer that the step failed.
+- `delegate_task` fails → inform customer. Never proceed silently.

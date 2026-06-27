@@ -12,8 +12,8 @@ metadata:
 # Skill: concept-images
 
 **Stage**: `concept`
-**Service**: hermes-worker
-**Handler**: `services/hermes-worker/skills/concept-images.js`
+**Service**: hermes-agent
+**Script**: `node /hermes/skills/hermaquette/concept-images/scripts/run.js <orderId>`
 
 ## Description
 
@@ -26,20 +26,20 @@ Images are art-directed as a **front-facing, single clean subject on a plain whi
 Emits `images_ready` event; UI presents images for user selection.
 Does NOT auto-enqueue the next stage — web API does that when user picks an image.
 
+**IMPORTANT: After presenting images, the orchestrator must STOP.** Do not proceed to geometry, vendor-quote, or any downstream step. The web UI handles concept selection and dispatches a separate geometry run after the customer picks an image.
+
 ## Trigger
 
-A `jobs` row with `stage='concept'` and `status='queued'`, created by intake-research.
-
-## Input (job.payload)
-
-```json
-{
-  "description": "cleaned front-facing description from research",
-  "material": "pa12"
-}
+Called by the orchestrator agent. The agent runs:
+```
+node /hermes/skills/hermaquette/concept-images/scripts/run.js <orderId>
 ```
 
-## Output (job.result)
+## Input (argv)
+
+orderId (string) — description is read from SQLite by the script (never passed as argv to prevent shell injection)
+
+## Output (stdout JSON)
 
 ```json
 {
@@ -47,13 +47,13 @@ A `jobs` row with `stage='concept'` and `status='queued'`, created by intake-res
     {"id": "…", "url": "https://…", "source": "nanobanana|dalle3|placeholder", "variation": 1}
   ],
   "count": 4,
-  "state": "concept"
+  "status": "ok"
 }
 ```
 
 ## Steps
 
-1. Read order from `orders`
+1. Read order from `orders` (description from SQLite)
 2. Build art-direction prompt (chunky full-3D figure, front-facing single subject, plain white background, vibrant color, suitable for image-to-3D)
 3. Try Nano Banana Pro × 4 variations
 4. If < 3 images: try DALL-E 3 × 1
@@ -72,12 +72,12 @@ A `jobs` row with `stage='concept'` and `status='queued'`, created by intake-res
 ## Invocation
 
 ```
-node /hermes/skills/hermaquette/concept-images/scripts/run.js <orderId> <description>
+node /hermes/skills/hermaquette/concept-images/scripts/run.js <orderId>
 ```
 
-Input: orderId (string), description (string — the cleaned front-facing description)
+Input: orderId (string — description is read from SQLite)
 Output (stdout JSON): `{ status, images, count }`
-Exit: 0 on success, 1 on fatal error (order not found, missing args)
+Exit: 0 on success, 1 on fatal error (order not found, missing orderId)
 
 ## Memory / learning hooks
 

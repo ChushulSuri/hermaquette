@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS orders (
     -- created | researching | generating | dfm_check | quoting | awaiting_payment
     -- | payment_confirmed | vendor_submitting | vendor_submitted | tracking
     -- | delivered | failed | cancelled
+    -- | geometry_pending | concept | approving_checkout | checkout_approved | checkout_blocked | error
   description TEXT NOT NULL,
   material    TEXT NOT NULL DEFAULT 'pa12',
     -- pa12 | resin | tpu
@@ -127,7 +128,7 @@ CREATE TABLE IF NOT EXISTS qa (
 CREATE INDEX IF NOT EXISTS idx_qa_order_id ON qa(order_id);
 
 -- ── jobs ─────────────────────────────────────────────────────────────────────
--- Background job queue consumed by hermes-worker.
+-- Background job queue (retained for rollback safety; no longer consumed).
 CREATE TABLE IF NOT EXISTS jobs (
   id           TEXT PRIMARY KEY,
   order_id     TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -175,12 +176,12 @@ CREATE INDEX IF NOT EXISTS idx_events_order_id_id ON events(order_id, id);
 -- ── orders (agentic-cutover additions) ───────────────────────────────────────
 -- Hermes run tracking and approval state for the two-run lifecycle.
 -- All additive; the jobs table is intentionally NOT dropped (rollback safety).
--- SQLite 3.37.0+ supports ADD COLUMN IF NOT EXISTS (idempotent).
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS run_id TEXT;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS run1_response_id TEXT;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS run2_run_id TEXT;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_confirmed_at INTEGER;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS checkout_approved INTEGER NOT NULL DEFAULT 0;
+-- NOTE: SQLite does NOT support ADD COLUMN IF NOT EXISTS. These columns are
+-- applied by db.ts on startup via per-statement try/catch (catches "duplicate
+-- column name" on re-run). The statements below are intentionally kept here
+-- for schema documentation; they are executed by db.ts's migration loop which
+-- catches syntax/duplicate errors gracefully.
+-- Columns: run_id, run1_response_id, run2_run_id, payment_confirmed_at, checkout_approved
 
 -- ── delegations ──────────────────────────────────────────────────────────────
 -- Written by delegated children's own scripts — the proof-of-agency signal.

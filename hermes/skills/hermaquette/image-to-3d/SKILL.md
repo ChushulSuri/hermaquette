@@ -72,10 +72,10 @@ Sculptor agent receives approved concept image URL.
 ## Invocation
 
 ```
-node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js <orderId> <image_url> [parentRunId]
+node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js <orderId> [parentRunId]
 ```
 
-Input: orderId (string), image_url (string), parentRunId (optional — from HERMES_RUN_ID env or argv[4])
+Input: orderId (string), parentRunId (optional — linked via COALESCE(run2_run_id, run_id) from SQLite)
 Output (stdout JSON): `{ status, glb_url, stl_url, geometry_hash, model_used, cost_usd, provider }`
 Exit: 0 on success, 1 on budget-exhausted or fatal error
 

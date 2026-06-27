@@ -11,7 +11,7 @@ export async function GET(
   const { id: orderId } = params
   const db = getDb()
 
-  const order = db.prepare('SELECT run_id, state FROM orders WHERE id = ?').get(orderId) as
+  const order = db.prepare('SELECT COALESCE(run2_run_id, run_id) as run_id, state FROM orders WHERE id = ?').get(orderId) as
     { run_id: string | null; state: string } | undefined
   if (!order) {
     return new Response('Order not found', { status: 404 })

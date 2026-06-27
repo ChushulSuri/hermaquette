@@ -83,6 +83,17 @@ if [ -d /hermes/skills/hermaquette ]; then
   echo "[start] Linked hermaquette skills"
 fi
 
+# ── Re-create node_modules symlink (bind mount shadows Dockerfile's) ─────────
+ln -sfn /app/node_modules /hermes/node_modules
+echo "[start] Linked node_modules → /app/node_modules"
+
+# ── Boot assert: verify ESM imports resolve from /hermes/skills/ ─────────────
+# Probe from /hermes/ (not /app) to prove the symlink actually works
+if ! cd /hermes && node --input-type=module -e "import('better-sqlite3').then(() => console.log('[start] ESM import check OK')).catch(e => { console.error('[start] FATAL: ESM import failed:', e.message); process.exit(1) })" 2>/dev/null; then
+  echo "[start] FATAL: node_modules symlink not working — skill scripts will fail"
+  exit 1
+fi
+
 # ── Start Nemotron Hermes gateway (port 8643) — only when key is available ────
 NEMOTRON_GW_STARTED=0
 if [ -n "${NEMOTRON_API_KEY}" ]; then
@@ -120,9 +131,8 @@ echo "[start] SOUL.md written to /root/.hermes/SOUL.md"
 echo "[start] AGENTS.md written to ${TERMINAL_CWD:-/app}/AGENTS.md"
 
 echo "[start] Starting Hermaquette agent (native Hermes, PID 1)..."
-exec \
-  API_SERVER_ENABLED=true \
-  API_SERVER_KEY="${HERMES_API_KEY:-hermaquette-local}" \
-  API_SERVER_PORT=8642 \
-  API_SERVER_HOST=0.0.0.0 \
-  hermes gateway
+export API_SERVER_ENABLED=true
+export API_SERVER_KEY="${HERMES_API_KEY:-hermaquette-local}"
+export API_SERVER_PORT=8642
+export API_SERVER_HOST=0.0.0.0
+exec hermes gateway

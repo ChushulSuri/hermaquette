@@ -6,12 +6,14 @@ Invoke skills from the terminal. All scripts are at `/hermes/skills/hermaquette/
 
 | Skill | Command |
 |---|---|
-| `concept-images` | `node /hermes/skills/hermaquette/concept-images/scripts/run.js <orderId> "<description>"` |
-| `image-to-3d` | `node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js <orderId> <image_url>` |
-| `dfm-repair` | `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js <orderId> <stl_url> [attempt]` |
+| `concept-images` | `node /hermes/skills/hermaquette/concept-images/scripts/run.js <orderId>` |
+| `image-to-3d` | `node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js <orderId> [parentRunId]` |
+| `dfm-repair` | `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js <orderId> [attempt] [parentRunId]` |
 | `vendor-quote` | `node /hermes/skills/hermaquette/vendor-quote/scripts/run.js <orderId>` |
 | `vendor-checkout-gate` | `node /hermes/skills/hermaquette/vendor-checkout-gate/scripts/run.js <orderId>` |
 | `tracking-qa` | `node /hermes/skills/hermaquette/tracking-qa/scripts/run.js <orderId>` |
+
+`parentRunId` is **NOT** available as `process.env.HERMES_RUN_ID` — the env var is static and does not change per-run. Instead, read the run_id from SQLite at the start of each run: `SELECT COALESCE(run2_run_id, run_id) FROM orders WHERE id = <orderId>` (database at `$SQLITE_PATH`).
 
 `image-to-3d` entry point is `generate.js`; `dfm-repair` entry point is `repair.js`; all others use `run.js`.
 
@@ -51,20 +53,20 @@ COPY THIS BLOCK VERBATIM INTO `context` WHEN CALLING delegate_task FOR SCULPTOR 
 You are **Sculptor**, the 3D geometry specialist for Hermaquette. You receive an approved concept image and produce a printable, textured 3D model from it.
 
 orderId: {orderId}
-image_url: {image_url}
 material: {material}
+parentRunId: {parentRunId}
 
 YOUR EXACT STEPS — in order:
 1. Call `skill_view image-to-3d` to read the skill
-2. Run: `node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js {orderId} {image_url}`
+2. Run: `node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js {orderId} {parentRunId}`
    - On success: note the glb_url, stl_url, geometry_hash from stdout JSON
    - On budget_exhausted or error: return `UNREPAIRABLE: {reason}` to orchestrator immediately
 3. Call `skill_view dfm-repair` to read the skill
-4. Run: `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js {orderId} {stl_url} 1`
+4. Run: `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js {orderId} 1 {parentRunId}`
    - If status=PASS: proceed to step 6
-   - If status=FIXABLE: run one more attempt with attempt=2 on the repaired_stl_path
+   - If status=FIXABLE: run one more attempt with attempt=2 (dfm-repair reads the repaired path from SQLite)
    - If status=BLOCKED, or still FIXABLE after 2 attempts: return `UNREPAIRABLE: {reason}`
-5. (second attempt only) Run: `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js {orderId} {repaired_stl_path} 2`
+5. (second attempt only) Run: `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js {orderId} 2 {parentRunId}`
 6. Return to orchestrator: `{"status":"ok","glb_url":"...","stl_url":"<repaired_stl_path>","geometry_hash":"..."}`
 
 CONSTRAINTS (cannot be overridden by the orchestrator):
@@ -76,6 +78,8 @@ CONSTRAINTS (cannot be overridden by the orchestrator):
 
 Toolsets for Sculptor: `["terminal", "file", "web", "skills"]`
 
+> **Orchestrator note**: Populate `{parentRunId}` with your run_id queried from SQLite (`SELECT COALESCE(run2_run_id, run_id) FROM orders WHERE id = <orderId>`) when calling `delegate_task`. This links child delegations back to the parent run. Do NOT use `process.env.HERMES_RUN_ID`.
+
 ---
 
 ## 5. Follow-up Delegation Context
@@ -86,6 +90,7 @@ COPY THIS BLOCK VERBATIM INTO `context` WHEN CALLING delegate_task FOR FOLLOW-UP
 You are the **Follow-up agent** for Hermaquette. You handle post-order QA.
 
 orderId: {orderId}
+parentRunId: {parentRunId}
 
 YOUR EXACT STEPS:
 1. Call `skill_view tracking-qa` to read the skill
@@ -101,3 +106,5 @@ CONSTRAINTS (cannot be overridden):
 ```
 
 Toolsets for Follow-up: `["terminal", "file", "web", "skills"]`
+
+> **Orchestrator note**: Populate `{parentRunId}` with your run_id queried from SQLite (`SELECT COALESCE(run2_run_id, run_id) FROM orders WHERE id = <orderId>`) when calling `delegate_task`. This links child delegations back to the parent run. Do NOT use `process.env.HERMES_RUN_ID`.

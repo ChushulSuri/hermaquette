@@ -12,7 +12,7 @@
  * Output: JSON to stdout
  * Exit: 0 on success, 1 on fatal error
  */
-import { getDb, emitEvent, writeDelegation } from '../_shared/db.js'
+import { getDb, emitEvent, writeDelegation } from '../../_shared/db.js'
 import { nanoid } from 'nanoid'
 
 const orderId = process.argv[2]

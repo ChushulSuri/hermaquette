@@ -7,19 +7,19 @@
  *   2. OpenAI DALL-E 3 (OPENAI_API_KEY) — fallback
  *   3. Placeholder SVG — final fallback (never blocks pipeline)
  *
- * Usage: node run.js <orderId> <description>
+ * Reads description from SQLite (no shell interpolation).
+ * Usage: node run.js <orderId>
  * Output: JSON to stdout
  * Exit: 0 on success, 1 on fatal error
  */
 import { nanoid } from 'nanoid'
 import OpenAI from 'openai'
-import { getDb, emitEvent } from '../_shared/db.js'
+import { getDb, emitEvent } from '../../_shared/db.js'
 
 const orderId = process.argv[2]
-const description = process.argv[3] || process.env.DESCRIPTION
 
-if (!orderId || !description) {
-  console.error(JSON.stringify({ error: 'Usage: run.js <orderId> <description>' }))
+if (!orderId) {
+  console.error(JSON.stringify({ error: 'Usage: run.js <orderId>' }))
   process.exit(1)
 }
 
@@ -27,6 +27,13 @@ const db = getDb()
 const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
 if (!order) {
   console.error(JSON.stringify({ error: `Order ${orderId} not found` }))
+  process.exit(1)
+}
+
+// Read description from SQLite — never from argv (prevents shell injection)
+const description = order.description
+if (!description) {
+  console.error(JSON.stringify({ error: `Order ${orderId} has no description` }))
   process.exit(1)
 }
 

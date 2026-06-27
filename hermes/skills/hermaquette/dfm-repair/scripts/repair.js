@@ -1,30 +1,43 @@
 #!/usr/bin/env node
 /**
  * dfm-repair skill script.
- * Downloads mesh from URL, runs /dfm/ai-mesh, returns structured result.
- *
- * Usage: node repair.js <orderId> <stl_url> [attempt] [parentRunId]
+ * Reads stl_url from SQLite by orderId (no shell interpolation).
+ * Usage: node repair.js <orderId> [attempt] [parentRunId]
  * Exit: 0 on PASS/FIXABLE, 1 on BLOCKED or fatal error
  */
 import { createWriteStream, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { pipeline } from 'stream/promises'
-import { getDb, emitEvent, upsertSpec, writeDelegation } from '../_shared/db.js'
+import { getDb, emitEvent, upsertSpec, writeDelegation } from '../../_shared/db.js'
 
 const CAD_DFM_URL = process.env.CAD_DFM_URL || 'http://localhost:8000'
 
 const orderId = process.argv[2]
-const stl_url = process.argv[3]
-const attempt = parseInt(process.argv[4] || '1')
-const parentRunId = process.argv[5] || process.env.HERMES_RUN_ID || ''
+const attempt = parseInt(process.argv[3] || '1')
+const parentRunId = process.argv[4] || process.env.HERMES_RUN_ID || ''
 
-if (!orderId || !stl_url) {
-  console.error(JSON.stringify({ error: 'Usage: repair.js <orderId> <stl_url> [attempt] [parentRunId]' }))
+if (!orderId) {
+  console.error(JSON.stringify({ error: 'Usage: repair.js <orderId> [attempt] [parentRunId]' }))
   process.exit(1)
 }
 
 const db = getDb()
+
+// Read stl_url from SQLite — never from argv (prevents shell injection)
+const spec = db.prepare('SELECT * FROM spec WHERE order_id = ?').get(orderId)
+if (!spec) {
+  console.error(JSON.stringify({ error: `Order ${orderId} has no spec record — run image-to-3d first` }))
+  process.exit(1)
+}
+
+// Use spec.stl_path (written by image-to-3d on success, updated by dfm-repair on repair)
+let stl_url = spec.stl_path
+
+if (!stl_url) {
+  console.error(JSON.stringify({ error: `Order ${orderId} has no stl_path — run image-to-3d first` }))
+  process.exit(1)
+}
 
 async function downloadMesh(url, destPath) {
   const resp = await fetch(url)
@@ -45,31 +58,57 @@ async function runDfmRepair(stlPath) {
   return resp.json()
 }
 
-// Download mesh to temp file
-const tmpDir = join(tmpdir(), 'hermaquette-dfm')
+// Determine if stl_url is a local path or remote URL
+const artifactsBase = process.env.ARTIFACTS_DIR || '/artifacts'
+const tmpDir = join(artifactsBase, orderId, 'dfm')
 try { mkdirSync(tmpDir, { recursive: true }) } catch {}
-const tmpStl = join(tmpDir, `mesh_${orderId}_${Date.now()}.stl`)
+const tmpStl = join(tmpDir, `mesh_${orderId}_${attempt}.stl`)
 
-try {
-  await downloadMesh(stl_url, tmpStl)
-} catch (err) {
-  upsertSpec(db, orderId, { dfm_status: 'BLOCKED' })
-  emitEvent(db, orderId, 'dfm-repair', 'dfm_blocked',
-    `Cannot fetch mesh for DFM repair: ${err.message}`,
-    { attempt, error: err.message })
-  console.log(JSON.stringify({
-    status: 'BLOCKED',
-    reason: `Cannot fetch mesh: ${err.message}`,
-    applied_repairs: [],
-    mesh_checks: {},
-  }))
-  process.exit(1)
+if (stl_url.startsWith('/') || stl_url.startsWith('file://')) {
+  // Local path — use directly (attempt 2 with repaired path from attempt 1)
+  const localPath = stl_url.startsWith('file://') ? stl_url.slice(7) : stl_url
+  try {
+    const { copyFileSync } = await import('fs')
+    copyFileSync(localPath, tmpStl)
+  } catch (err) {
+    db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
+    upsertSpec(db, orderId, { dfm_status: 'BLOCKED' })
+    emitEvent(db, orderId, 'dfm-repair', 'dfm_blocked',
+      `Cannot read local mesh: ${err.message}`,
+      { attempt, error: err.message })
+    console.log(JSON.stringify({
+      status: 'BLOCKED',
+      reason: `Cannot read local mesh: ${err.message}`,
+      applied_repairs: [],
+      mesh_checks: {},
+    }))
+    process.exit(1)
+  }
+} else {
+  // Remote URL — download to artifacts
+  try {
+    await downloadMesh(stl_url, tmpStl)
+  } catch (err) {
+    db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
+    upsertSpec(db, orderId, { dfm_status: 'BLOCKED' })
+    emitEvent(db, orderId, 'dfm-repair', 'dfm_blocked',
+      `Cannot fetch mesh for DFM repair: ${err.message}`,
+      { attempt, error: err.message })
+    console.log(JSON.stringify({
+      status: 'BLOCKED',
+      reason: `Cannot fetch mesh: ${err.message}`,
+      applied_repairs: [],
+      mesh_checks: {},
+    }))
+    process.exit(1)
+  }
 }
 
 let result
 try {
   result = await runDfmRepair(tmpStl)
 } catch (err) {
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   upsertSpec(db, orderId, { dfm_status: 'BLOCKED' })
   emitEvent(db, orderId, 'dfm-repair', 'dfm_blocked',
     `DFM service unavailable: ${err.message}`,
@@ -123,7 +162,10 @@ if (result.status === 'PASS') {
   process.exit(0)
 
 } else if (result.status === 'FIXABLE') {
-  upsertSpec(db, orderId, { dfm_status: 'FIXABLE' })
+  upsertSpec(db, orderId, {
+    dfm_status: 'FIXABLE',
+    stl_path: result.repaired_stl_path || stl_url,
+  })
   emitEvent(db, orderId, 'dfm-repair', 'dfm_fixable',
     `Mesh is fixable — attempt ${attempt}`,
     { attempt, applied_repairs: result.applied_repairs, mesh_checks: result.mesh_checks, dfm_explanation: dfmExplanation })
@@ -137,8 +179,9 @@ if (result.status === 'PASS') {
   process.exit(0)
 
 } else {
-  // BLOCKED
+  // BLOCKED — set error state so UI and web can react
   upsertSpec(db, orderId, { dfm_status: 'BLOCKED' })
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   emitEvent(db, orderId, 'dfm-repair', 'dfm_blocked',
     `Mesh cannot be repaired: ${result.reason || 'BLOCKED'}`,
     { attempt, mesh_checks: result.mesh_checks, dfm_explanation: dfmExplanation })

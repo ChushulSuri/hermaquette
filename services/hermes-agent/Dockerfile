@@ -13,11 +13,11 @@ COPY hermes-runtime/ /hermes-runtime/
 RUN pip install /hermes-runtime
 
 # Node.js skill script dependencies (better-sqlite3, stripe, fal SDK, etc.)
-COPY services/hermes-worker/package*.json ./
+COPY services/hermes-agent/package*.json ./
 RUN npm ci --omit=dev
 
 # start.sh (no JS worker files remain)
-COPY services/hermes-worker/start.sh .
+COPY services/hermes-agent/start.sh .
 COPY packages/ /app/packages/
 COPY db/ /db/
 # Copy hermaquette skills + initial MEMORY.md

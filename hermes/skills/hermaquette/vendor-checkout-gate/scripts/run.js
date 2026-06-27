@@ -17,7 +17,7 @@
  */
 import { nanoid } from 'nanoid'
 import Stripe from 'stripe'
-import { getDb, emitEvent } from '../_shared/db.js'
+import { getDb, emitEvent } from '../../_shared/db.js'
 
 const SPEND_CAP_CENTS = parseInt(process.env.SPEND_CAP_CENTS || '5000')
 
@@ -51,6 +51,7 @@ emitEvent(db, orderId, 'checkout_gate', 'progress',
 
 // Condition 1: payment_confirmed_at IS NOT NULL
 if (!order.payment_confirmed_at) {
+  db.prepare("UPDATE orders SET state = 'checkout_blocked', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   emitEvent(db, orderId, 'checkout_gate', 'checkout_blocked',
     'Checkout gate blocked: payment not yet confirmed',
     { reason: 'payment_not_confirmed', vendor_cost: vendorCost })
@@ -64,6 +65,7 @@ if (!order.payment_confirmed_at) {
 
 // Condition 2: checkout_approved = 1 (state must be 'checkout_approved', not 'checkout_pending_approval')
 if (!order.checkout_approved) {
+  db.prepare("UPDATE orders SET state = 'checkout_blocked', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   emitEvent(db, orderId, 'checkout_gate', 'checkout_blocked',
     'Checkout gate blocked: human approval not yet granted',
     { reason: 'approval_pending', order_state: order.state, vendor_cost: vendorCost })
@@ -77,6 +79,7 @@ if (!order.checkout_approved) {
 
 // Condition 3: vendor_cost_cents <= SPEND_CAP_CENTS
 if (vendorCost > SPEND_CAP_CENTS) {
+  db.prepare("UPDATE orders SET state = 'checkout_blocked', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   emitEvent(db, orderId, 'checkout_gate', 'checkout_blocked',
     `Checkout gate blocked: cost $${(vendorCost / 100).toFixed(2)} exceeds spend cap $${(SPEND_CAP_CENTS / 100).toFixed(2)}`,
     { reason: 'over_spend_cap', vendor_cost: vendorCost, spend_cap: SPEND_CAP_CENTS })
@@ -144,6 +147,10 @@ if (process.env.STRIPE_ISSUING_ENABLED === 'true' && process.env.STRIPE_SECRET_K
 emitEvent(db, orderId, 'checkout_gate', 'checkout_approved',
   `Vendor checkout gate passed. Spend path: ${spendPath}.`,
   { spend_path: spendPath, card_id: cardId, executed: false, vendor_cost: vendorCost })
+
+// Set final state so the order doesn't sit in approving_checkout forever
+db.prepare("UPDATE orders SET state = 'checkout_approved', updated_at = ? WHERE id = ?")
+  .run(Date.now(), orderId)
 
 console.warn(`[checkout-gate] PASSED order=${orderId} spendPath=${spendPath} cardId=${cardId}`)
 

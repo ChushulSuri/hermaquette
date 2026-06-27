@@ -79,10 +79,10 @@ geometry reasoning or suggest mesh edits. The repair macro is deterministic.
 ## Invocation
 
 ```
-node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js <orderId> <stl_url> [attempt] [parentRunId]
+node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js <orderId> [attempt] [parentRunId]
 ```
 
-Input: orderId (string), stl_url (string), attempt (int, default 1), parentRunId (optional — from HERMES_RUN_ID env or argv[5])
+Input: orderId (string), attempt (int, default 1), parentRunId (optional — linked via COALESCE(run2_run_id, run_id) from SQLite)
 Output (stdout JSON): `{ status, reason, applied_repairs, mesh_checks, repaired_stl_path, geometry_hash, attempt, dfm_explanation }`
 Exit: 0 on PASS or FIXABLE, 1 on BLOCKED or fatal error
 
