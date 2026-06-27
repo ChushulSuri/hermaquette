@@ -25,6 +25,7 @@ export function getDb(): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.pragma('synchronous = NORMAL')
+  db.pragma('busy_timeout = 5000')
   db.pragma('cache_size = -64000') // 64MB page cache
   db.pragma('temp_store = MEMORY')
 

@@ -27,6 +27,7 @@ const db = getDb()
 // Read stl_url from SQLite — never from argv (prevents shell injection)
 const spec = db.prepare('SELECT * FROM spec WHERE order_id = ?').get(orderId)
 if (!spec) {
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   console.error(JSON.stringify({ error: `Order ${orderId} has no spec record — run image-to-3d first` }))
   process.exit(1)
 }
@@ -35,6 +36,7 @@ if (!spec) {
 let stl_url = spec.stl_path
 
 if (!stl_url) {
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   console.error(JSON.stringify({ error: `Order ${orderId} has no stl_path — run image-to-3d first` }))
   process.exit(1)
 }

@@ -25,12 +25,14 @@ writeDelegation(db, orderId, parentRunId, 'sculptor', 'started')
 // Read image_url from spec table — never from argv (prevents shell injection)
 const spec = db.prepare('SELECT * FROM spec WHERE order_id = ?').get(orderId)
 if (!spec) {
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   console.error(JSON.stringify({ error: `Order ${orderId} has no spec record — run concept-images first` }))
   process.exit(1)
 }
 
 const image_url = spec.approved_image_url
 if (!image_url) {
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   console.error(JSON.stringify({ error: `Order ${orderId} has no approved_image_url — run concept-approve first` }))
   process.exit(1)
 }

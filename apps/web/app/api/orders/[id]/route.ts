@@ -137,9 +137,17 @@ export async function POST(
       return NextResponse.json({ error: 'Could not download concept image' }, { status: 502 })
     }
 
-    // Update spec with approved image (agent reads image_url from SQLite — not from input)
-    db.prepare('UPDATE spec SET approved_image_id=?, approved_image_url=?, updated_at=? WHERE order_id=?')
-      .run(body.image_id, body.image_url, now, id)
+    // Upsert spec with approved image — spec row may not exist (V1 intake-research created it)
+    const existingSpec = db.prepare('SELECT id FROM spec WHERE order_id = ?').get(id) as { id: string } | undefined
+    if (existingSpec) {
+      db.prepare('UPDATE spec SET approved_image_id=?, approved_image_url=?, material=?, updated_at=? WHERE order_id=?')
+        .run(body.image_id, body.image_url, order.material || 'pa12', now, id)
+    } else {
+      db.prepare(`
+        INSERT INTO spec (id, order_id, approved_image_id, approved_image_url, material, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(crypto.randomUUID().slice(0, 12), id, body.image_id, body.image_url, order.material || 'pa12', now, now)
+    }
     // Emit event so agent can see approval
     db.prepare("INSERT INTO events (order_id, stage, event, message, data, created_at) VALUES (?, 'concept', 'concept_approved', ?, ?, ?)")
       .run(id, 'Customer approved concept image', JSON.stringify({ image_id: body.image_id, image_url: body.image_url }), now)
@@ -249,12 +257,12 @@ Payment confirmed and spend approved by human. Please perform the governed vendo
           .run(runData.run_id, Date.now(), id)
       } else {
         console.error('[approve] Run 2 dispatch non-2xx:', runRes.status)
-        // Roll back — clear run2_run_id so re-dispatch is possible
-        db.prepare('UPDATE orders SET run2_run_id = NULL, updated_at = ? WHERE id = ?').run(Date.now(), id)
+        // Roll back so user can retry — reset state + checkout_approved
+        db.prepare('UPDATE orders SET run2_run_id = NULL, checkout_approved = 0, state = \'paid\', updated_at = ? WHERE id = ?').run(Date.now(), id)
       }
     } catch (err) {
       console.error('[approve] Run 2 dispatch failed:', err)
-      db.prepare('UPDATE orders SET run2_run_id = NULL, updated_at = ? WHERE id = ?').run(Date.now(), id)
+      db.prepare('UPDATE orders SET run2_run_id = NULL, checkout_approved = 0, state = \'paid\', updated_at = ? WHERE id = ?').run(Date.now(), id)
     }
 
     return NextResponse.json({ ok: true, state: 'approving_checkout' })

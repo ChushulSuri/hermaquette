@@ -28,10 +28,12 @@ const db = getDb()
 
 const spec = db.prepare('SELECT * FROM spec WHERE order_id = ?').get(orderId)
 if (!spec) {
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   console.error(JSON.stringify({ error: `Spec not found for order ${orderId}` }))
   process.exit(1)
 }
 if (spec.dfm_status !== 'PASS') {
+  db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
   console.error(JSON.stringify({ error: `Cannot quote: DFM status is '${spec.dfm_status}', expected 'PASS'` }))
   process.exit(1)
 }
@@ -89,6 +91,7 @@ try {
 if (quoteResult.quote_source !== 'manual') {
   const printability = quoteResult.printability ?? quoteResult.status
   if (printability == null) {
+    db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
     emitEvent(db, orderId, 'quote', 'printability_unverified',
       'Vendor did not return a printability verdict — needs manual review',
       { quote_source: quoteResult.quote_source })
@@ -97,6 +100,7 @@ if (quoteResult.quote_source !== 'manual') {
   }
   const isPrintable = printability === 'printable' || printability === 'ok'
   if (!isPrintable) {
+    db.prepare("UPDATE orders SET state = 'error', updated_at = ? WHERE id = ?").run(Date.now(), orderId)
     emitEvent(db, orderId, 'quote', 'printability_failed',
       `Sculptor mesh rejected by vendor: printability="${printability}"`,
       { printability, quote_source: quoteResult.quote_source })

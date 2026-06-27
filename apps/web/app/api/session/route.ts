@@ -38,8 +38,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Idempotent: only update if NOT already in a paid-or-later state
-  // Never regress from later states (approving_checkout, checkout_approved)
-  if (!['paid', 'approving_checkout', 'checkout_approved'].includes(order.state)) {
+  // Never regress from later states (approving_checkout, checkout_approved, terminal)
+  if (!['paid', 'approving_checkout', 'checkout_approved', 'checkout_blocked', 'error'].includes(order.state)) {
     const now = Date.now()
 
     // Update order state + set payment_confirmed_at (precondition for Approve button)

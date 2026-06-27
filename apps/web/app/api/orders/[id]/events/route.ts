@@ -20,7 +20,7 @@ export async function GET(
   const encoder = new TextEncoder()
 
   // If no run_id yet or order is in terminal state, stream DB events only
-  if (!order.run_id || ['error', 'delivered', 'checkout_approved'].includes(order.state)) {
+  if (!order.run_id || ['error', 'delivered', 'checkout_approved', 'checkout_blocked'].includes(order.state)) {
     const events = db.prepare(
       'SELECT id, stage, event, message, data, created_at FROM events WHERE order_id = ? ORDER BY id ASC'
     ).all(orderId) as Array<Record<string, unknown>>
