@@ -4,6 +4,12 @@ description: Use after DFM PASS to upload the STL to Sculpteo, enforce the fail-
 version: 1.0.0
 author: Hermaquette
 license: MIT
+required_environment_variables:
+  - SLANT3D_API_KEY
+  - SLANT3D_API_URL
+  - SCULPTEO_API_KEY
+  - SCULPTEO_API_URL
+  - PUBLIC_BASE_URL
 metadata:
   hermes:
     tags: [hermaquette, vendor, sculpteo, quote, ledger]

@@ -50,6 +50,32 @@ approvals:
 APPEOF
 echo "[start] Approvals mode: off (autonomous demo)"
 
+# ── Terminal env passthrough ─────────────────────────────────────────────────
+# Hermes strips env vars from skill/terminal subprocesses for security. The
+# hermaquette skills (concept-images, image-to-3d, dfm-repair, vendor-quote,
+# vendor-checkout-gate) need these API keys, so allowlist them explicitly.
+cat >> /root/.hermes/config.yaml <<APPEOF
+terminal:
+  env_passthrough:
+    - FAL_KEY
+    - SLANT3D_API_KEY
+    - SLANT3D_API_URL
+    - NANOBANANA_API_KEY
+    - NEMOTRON_API_KEY
+    - NEMOTRON_MODEL
+    - NEMOTRON_BASE_URL
+    - STRIPE_SECRET_KEY
+    - STRIPE_ISSUING_ENABLED
+    - SPEND_CAP_CENTS
+    - SCULPTEO_API_KEY
+    - SCULPTEO_API_URL
+    - CAD_DFM_URL
+    - SQLITE_PATH
+    - ARTIFACTS_DIR
+    - PUBLIC_BASE_URL
+APPEOF
+echo "[start] Terminal env passthrough configured for skill API keys"
+
 # Stripe MCP removed — @stripe/mcp-server was a 404 that hung every run. Stripe demos via vendor-checkout-gate SDK + Checkout.
 
 # ── Nemotron Hermes gateway config (NVIDIA — designated DFM/repair steps) ────

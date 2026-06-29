@@ -4,6 +4,9 @@ description: Use to generate concept images for a full-3D figure (chunky designe
 version: 1.0.0
 author: Hermaquette
 license: MIT
+required_environment_variables:
+  - FAL_KEY
+  - NANOBANANA_API_KEY
 metadata:
   hermes:
     tags: [hermaquette, concept, image-generation, full-3d]

@@ -4,6 +4,11 @@ description: Repair AI mesh geometry for SLS printability.
 version: "1.0.0"
 author: Hermaquette
 license: MIT
+required_environment_variables:
+  - NEMOTRON_API_KEY
+  - NEMOTRON_MODEL
+  - NEMOTRON_BASE_URL
+  - CAD_DFM_URL
 metadata:
   tags:
     - dfm

@@ -4,6 +4,10 @@ description: Use to gate vendor spend — spend-cap check + human approval, then
 version: 1.0.0
 author: Hermaquette
 license: MIT
+required_environment_variables:
+  - STRIPE_SECRET_KEY
+  - STRIPE_ISSUING_ENABLED
+  - SPEND_CAP_CENTS
 metadata:
   hermes:
     tags: [hermaquette, stripe, issuing, governance, spend-cap]

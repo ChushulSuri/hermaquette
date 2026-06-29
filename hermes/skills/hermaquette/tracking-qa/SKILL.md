@@ -4,6 +4,9 @@ description: Roadmap/scaffold (not yet implemented) — order tracking + GPT-vis
 version: 0.1.0
 author: Hermaquette
 license: MIT
+required_environment_variables:
+  - NEMOTRON_API_KEY
+  - AGENTMAIL_API_KEY
 metadata:
   hermes:
     tags: [hermaquette, tracking, qa, vision, roadmap]
