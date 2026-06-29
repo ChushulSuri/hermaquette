@@ -9,7 +9,7 @@ mkdir -p /root/.hermes/skills /root/.hermes-nemotron
 # to an API-key-served model so the pipeline doesn't error on vanilla bring-up.
 if [ -n "${HERMES_AUTH_JSON}" ]; then
   _hermes_model="${HERMES_LLM_MODEL:-gpt-5.5}"
-  _reasoning_line="  reasoning_effort: ${HERMES_REASONING_EFFORT:-xhigh}"
+  _reasoning_line="  reasoning_effort: ${HERMES_REASONING_EFFORT:-high}"
   echo "[start] ChatGPT OAuth present — using model: $_hermes_model"
 else
   _hermes_model="${HERMES_LLM_MODEL_API_FALLBACK:-gpt-4o}"
@@ -43,23 +43,14 @@ display:
   streaming: false
 EOF
 
-# ── Stripe MCP server (agent-tooling story for judges) ────────────────────────
-# Adds Stripe's official MCP server so the agent can issue cards and create
-# payment links through Stripe's agent infrastructure.  The server is only
-# started when STRIPE_SECRET_KEY is set and starts with sk_test_ or rk_test_.
-if [ -n "${STRIPE_SECRET_KEY}" ] && echo "${STRIPE_SECRET_KEY}" | grep -qE '^(sk_test_|rk_test_)'; then
-  cat >> /root/.hermes/config.yaml <<MCPF
-mcp_servers:
-  stripe:
-    command: npx
-    args: ["-y", "@stripe/mcp-server"]
-    env:
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-MCPF
-  echo "[start] Stripe MCP server configured (test mode)"
-else
-  echo "[start] STRIPE_SECRET_KEY not set or not test-mode — Stripe MCP skipped"
-fi
+# ── Approvals: off for autonomous demo ──────────────────────────────────────
+cat >> /root/.hermes/config.yaml <<APPEOF
+approvals:
+  mode: "off"
+APPEOF
+echo "[start] Approvals mode: off (autonomous demo)"
+
+# Stripe MCP removed — @stripe/mcp-server was a 404 that hung every run. Stripe demos via vendor-checkout-gate SDK + Checkout.
 
 # ── Nemotron Hermes gateway config (NVIDIA — designated DFM/repair steps) ────
 # Uses a separate HERMES_HOME so it holds its own credentials and config.

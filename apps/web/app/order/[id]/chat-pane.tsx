@@ -169,11 +169,39 @@ function eventToBubble(evt: Event): Bubble | null {
     return null
   }
 
+  // message.delta is handled by coalescing in the component — never render individually
+  if (evt.event === 'message.delta') {
+    return null
+  }
+
+  // Tool events — show a human-readable label
+  if (evt.event === 'tool.started' || evt.event === 'tool.completed') {
+    const toolName = data.tool || data.name || evt.stage
+    const label = evt.event === 'tool.started'
+      ? `Running ${toolName}...`
+      : `${toolName} completed`
+    return {
+      id: `evt-${evt.id}`,
+      role: 'agent',
+      message: label,
+      stage: evt.stage,
+      event: evt.event,
+      timestamp: evt.created_at,
+      icon: evt.event === 'tool.started' ? '⚙' : '✓',
+    }
+  }
+
   // Generic fallback
+  const fallbackMessage = (() => {
+    const raw = evt.message || `${evt.stage}: ${evt.event}`
+    // Strip any leading "undefined:" prefix
+    return raw.replace(/^undefined\s*:\s*/, '').trim() || 'Processing...'
+  })()
+
   return {
     id: `evt-${evt.id}`,
     role: 'agent',
-    message: evt.message || `${evt.stage}: ${evt.event}`,
+    message: fallbackMessage,
     stage: evt.stage,
     event: evt.event,
     timestamp: evt.created_at,
@@ -193,11 +221,46 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [connected, setConnected] = useState(false)
 
+  // message.delta coalescing
+  const deltaBuffer = useRef('')
+  const deltaTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deltaBubbleId = useRef(`delta-${Date.now()}`)
+
   const appendBubble = useCallback((bubble: Bubble) => {
     if (seenIds.current.has(bubble.id)) return
     seenIds.current.add(bubble.id)
     setBubbles(prev => [...prev, bubble])
   }, [])
+
+  const flushDelta = useCallback(() => {
+    if (!deltaBuffer.current) return
+    const text = deltaBuffer.current
+    deltaBuffer.current = ''
+    const id = deltaBubbleId.current
+    if (seenIds.current.has(id)) {
+      // Update existing delta bubble
+      setBubbles(prev => prev.map(b => b.id === id ? { ...b, message: text } : b))
+    } else {
+      appendBubble({
+        id,
+        role: 'agent',
+        message: text,
+        stage: 'message',
+        event: 'message.delta',
+        timestamp: Date.now(),
+        icon: '✦',
+      })
+    }
+    deltaBubbleId.current = `delta-${Date.now()}`
+  }, [appendBubble])
+
+  const scheduleFlush = useCallback(() => {
+    if (deltaTimer.current) clearTimeout(deltaTimer.current)
+    deltaTimer.current = setTimeout(() => {
+      flushDelta()
+      deltaTimer.current = null
+    }, 300)
+  }, [flushDelta])
 
   // SSE subscription
   useEffect(() => {
@@ -206,6 +269,7 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
       try {
         const evt = JSON.parse(msg.data) as Event
         if (evt.event === 'stream.complete') {
+          flushDelta()
           setConnected(false)
           evtSource.close()
           return
@@ -213,6 +277,15 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
         if (evt.event === 'stream.error') {
           return
         }
+        if (evt.event === 'message.delta') {
+          const data = (() => { try { return JSON.parse(evt.data) } catch { return {} } })()
+          deltaBuffer.current += data.text || data.delta || data.content || ''
+          deltaBubbleId.current = deltaBubbleId.current || `delta-${Date.now()}`
+          scheduleFlush()
+          return
+        }
+        // Flush any pending delta before rendering a discrete event
+        if (deltaBuffer.current) flushDelta()
         const bubble = eventToBubble(evt)
         if (bubble) appendBubble(bubble)
       } catch { /* malformed */ }
@@ -220,8 +293,11 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
     evtSource.onopen = () => setConnected(true)
     evtSource.onerror = () => setConnected(false)
 
-    return () => evtSource.close()
-  }, [orderId, appendBubble])
+    return () => {
+      if (deltaTimer.current) clearTimeout(deltaTimer.current)
+      evtSource.close()
+    }
+  }, [orderId, appendBubble, flushDelta, scheduleFlush])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -231,6 +307,32 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
   }, [bubbles])
 
   const isTerminal = ['error', 'checkout_approved', 'checkout_blocked', 'delivered'].includes(orderState)
+
+  const [revisionText, setRevisionText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [revisionError, setRevisionError] = useState('')
+
+  async function handleRevise() {
+    if (!revisionText.trim() || submitting) return
+    setSubmitting(true)
+    setRevisionError('')
+    try {
+      const res = await fetch(`/api/orders/${orderId}/revise`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: revisionText.trim() }),
+      })
+      if (res.ok) {
+        setRevisionText('')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setRevisionError(data.error || 'Revision failed')
+      }
+    } catch {
+      setRevisionError('Network error')
+    }
+    setSubmitting(false)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -279,6 +381,31 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
           </div>
         ))}
       </div>
+
+      {/* Revision input — only in concept state */}
+      {orderState === 'concept' && (
+        <div className="px-4 py-3 border-t" style={{ borderColor: '#1e1e2e' }}>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={revisionText}
+              onChange={e => setRevisionText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRevise()}
+              placeholder="Request a revision (e.g., make it taller, rounder...)"
+              className="flex-1 bg-[#16161f] border border-[#1e1e2e] rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-purple-500"
+              disabled={submitting}
+            />
+            <button
+              onClick={handleRevise}
+              disabled={!revisionText.trim() || submitting}
+              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+            >
+              {submitting ? '...' : 'Revise'}
+            </button>
+          </div>
+          {revisionError && <p className="text-xs text-red-400 mt-1">{revisionError}</p>}
+        </div>
+      )}
     </div>
   )
 }

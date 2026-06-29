@@ -54,8 +54,11 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# Copy DB schema so lib/db.ts can apply it at runtime
+COPY --from=builder /db/ /db/
+
 # Ensure data and artifacts dirs exist (volumes will mount over these)
-RUN mkdir -p /data /artifacts && chown -R nextjs:nodejs /data /artifacts /app
+RUN mkdir -p /data /artifacts && chown -R nextjs:nodejs /data /artifacts /app /db
 
 USER nextjs
 

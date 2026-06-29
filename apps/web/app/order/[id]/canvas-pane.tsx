@@ -45,7 +45,7 @@ export function CanvasPane({
   glbUrl,
   spendCapCents,
 }: CanvasPaneProps) {
-  const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved', 'geometry_pending'].includes(orderState)
+  const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(orderState)
   const showConceptGallery = (orderState === 'concept' || orderState === 'geometry_pending') && conceptImages.length > 0
   const showMoneyCard = ledger && ['quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(orderState)
   const showPayButton = orderState === 'quote' && ledger
@@ -71,6 +71,14 @@ export function CanvasPane({
             No hard price yet — indicative range based on complexity.
           </p>
           <ConceptGallery orderId={orderId} images={conceptImages} />
+        </div>
+      )}
+
+      {/* Geometry Pending Loading */}
+      {orderState === 'geometry_pending' && (
+        <div className="mb-6 p-6 rounded-xl bg-indigo-900/20 border border-indigo-800 text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full mx-auto mb-3" />
+          <p className="text-sm text-indigo-300">Building 3D model from concept...</p>
         </div>
       )}
 
@@ -135,6 +143,18 @@ export function CanvasPane({
       {showVendorApproval && ledger && (
         <div className="mb-6">
           <VendorApprovalPanel orderId={orderId} currency={ledger.currency} vendorCostCents={ledger.vendor_cost_cents} spendCapCents={spendCapCents} />
+        </div>
+      )}
+
+      {/* Checkout Approved Confirmation */}
+      {orderState === 'checkout_approved' && (
+        <div className="mb-6 p-4 rounded-xl bg-teal-900/30 border border-teal-700">
+          <h2 className="text-lg font-semibold text-teal-300 mb-2">
+            <span className="text-teal-400">Governed checkout</span> approved
+          </h2>
+          <p className="text-sm text-gray-300">
+            The order has been approved for manufacturing. In production, a virtual card would be issued and the order shipped.
+          </p>
         </div>
       )}
     </div>
