@@ -18,7 +18,10 @@ RUN if [ ! -f /hermes-runtime/pyproject.toml ] && [ ! -f /hermes-runtime/setup.p
         git clone https://github.com/NousResearch/hermes-agent /hermes-runtime; \
         git -C /hermes-runtime checkout d6269da7fdfe3a80eee60a4675b9e6ef55a71559; \
     fi \
-    && pip install /hermes-runtime
+    && pip install /hermes-runtime \
+    # aiohttp is only in Hermes' [messaging] extra, but the /v1/runs API server
+    # (api_server.py) requires it. Install directly so the gateway exposes /v1/runs.
+    && pip install "aiohttp==3.13.4"
 
 # Node.js skill script dependencies (better-sqlite3, stripe, fal SDK, etc.)
 COPY services/hermes-agent/package*.json ./
