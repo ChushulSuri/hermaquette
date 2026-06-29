@@ -71,7 +71,11 @@ services:
     volumes:
       - sqlite_data:/data
       - artifacts:/artifacts
-      - ./hermes:/hermes   # bind-mount so DFM lessons written to MEMORY.md persist
+      # NOTE: do NOT bind-mount ./hermes here — the image already contains a fully
+      # populated /hermes (SOUL.md, AGENTS.md, skills/) via `COPY hermes/`. On Coolify
+      # the host ./hermes is near-empty, so a bind mount shadows the image and breaks
+      # the persona/skill copies (cp /hermes/SOUL.md fails → crash-loop). MEMORY.md
+      # lesson persistence is sacrificed (fine for the demo).
     depends_on:
       - cad-dfm
     networks:
