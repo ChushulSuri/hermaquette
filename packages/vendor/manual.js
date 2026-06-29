@@ -11,9 +11,9 @@
 // Recorded quotes for common materials (from actual Sculpteo pricing, June 2026)
 // Source: manual quote run on a 100×80×6mm PA12 plaque, ~62cm³ volume
 const RECORDED_QUOTES = {
-  pa12:  { cost_cents: 3150, lead_time_days: 7,  currency: 'eur' }, // €31.50
-  resin: { cost_cents: 2200, lead_time_days: 5,  currency: 'eur' }, // €22.00
-  tpu:   { cost_cents: 4800, lead_time_days: 10, currency: 'eur' }, // €48.00
+  pa12:  { cost_cents: 3150, lead_time_days: 7,  currency: 'usd' }, // $31.50
+  resin: { cost_cents: 2200, lead_time_days: 5,  currency: 'usd' }, // $22.00
+  tpu:   { cost_cents: 4800, lead_time_days: 10, currency: 'usd' }, // $48.00
 }
 
 /**

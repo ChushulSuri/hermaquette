@@ -40,7 +40,7 @@ export function MoneyCard({ ledger }: MoneyCardProps) {
 
       <div className="space-y-2 text-sm">
         <div className="flex justify-between text-gray-300">
-          <span>Vendor cost (Sculpteo)</span>
+          <span>Vendor cost (Slant3D)</span>
           <span className="font-mono">{cents(ledger.vendor_cost_cents, symbol)} <span className="text-gray-500 text-xs">{currency}</span></span>
         </div>
         <div className="flex justify-between text-gray-300">
