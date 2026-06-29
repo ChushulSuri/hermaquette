@@ -4,8 +4,6 @@ description: Generate printable 3D model from concept image.
 version: "1.0.0"
 author: Hermaquette
 license: MIT
-platforms:
-  - hermes
 metadata:
   tags:
     - 3d

@@ -4,8 +4,6 @@ description: Repair AI mesh geometry for SLS printability.
 version: "1.0.0"
 author: Hermaquette
 license: MIT
-platforms:
-  - hermes
 metadata:
   tags:
     - dfm
