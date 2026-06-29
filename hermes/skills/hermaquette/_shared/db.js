@@ -4,6 +4,21 @@ import { nanoid } from 'nanoid'
 import fs from 'fs'
 import path from 'path'
 
+// ── Skill env bootstrap ──────────────────────────────────────────────────────
+// Hermes strips env vars from skill subprocesses for security, so API keys
+// (FAL_KEY, SLANT3D_API_KEY, NEMOTRON_API_KEY, STRIPE_SECRET_KEY, …) are not
+// inherited. start.sh writes them to /data/skill-env.json; load them here (for
+// any key not already present) so every skill that imports _shared gets them.
+try {
+  const envFile = process.env.SKILL_ENV_FILE || '/data/skill-env.json'
+  if (fs.existsSync(envFile)) {
+    const loaded = JSON.parse(fs.readFileSync(envFile, 'utf-8'))
+    for (const [k, v] of Object.entries(loaded)) {
+      if (process.env[k] === undefined || process.env[k] === '') process.env[k] = v
+    }
+  }
+} catch { /* non-fatal — skills fall back to their own defaults */ }
+
 const SQLITE_PATH = process.env.SQLITE_PATH || '/data/hermaquette.db'
 
 let _db = null

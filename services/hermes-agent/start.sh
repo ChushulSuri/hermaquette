@@ -76,6 +76,23 @@ terminal:
 APPEOF
 echo "[start] Terminal env passthrough configured for skill API keys"
 
+# ── Skill env file ───────────────────────────────────────────────────────────
+# Belt-and-suspenders: Hermes may still strip env from skill subprocesses, so
+# write the API keys to a file that _shared/db.js loads into process.env. This
+# guarantees the hermaquette skills can reach FAL/Slant3D/Nemotron/Stripe.
+mkdir -p /data
+python3 - <<'PYENV'
+import json, os
+keys = ["FAL_KEY","SLANT3D_API_KEY","SLANT3D_API_URL","NANOBANANA_API_KEY",
+        "NEMOTRON_API_KEY","NEMOTRON_MODEL","NEMOTRON_BASE_URL",
+        "STRIPE_SECRET_KEY","STRIPE_ISSUING_ENABLED","SPEND_CAP_CENTS",
+        "SCULPTEO_API_KEY","SCULPTEO_API_URL","CAD_DFM_URL","ARTIFACTS_DIR",
+        "PUBLIC_BASE_URL","SQLITE_PATH"]
+data = {k: os.environ[k] for k in keys if os.environ.get(k)}
+open("/data/skill-env.json","w").write(json.dumps(data))
+print(f"[start] Wrote /data/skill-env.json with {len(data)} skill env keys")
+PYENV
+
 # Stripe MCP removed — @stripe/mcp-server was a 404 that hung every run. Stripe demos via vendor-checkout-gate SDK + Checkout.
 
 # ── Nemotron Hermes gateway config (NVIDIA — designated DFM/repair steps) ────
