@@ -72,7 +72,7 @@ async function falPollResult(queueResp, maxWaitMs = 180_000) {
 export async function generateGeometry(imageUrl, opts = {}) {
   // Generate untextured 3D mesh from image
   const queueResp = await falPost(HUNYUAN_ENDPOINT, {
-    image_url: imageUrl,
+    input_image_url: imageUrl,
     output_format: 'glb',
     do_remove_background: true,
     // no texture for geometry pass
@@ -94,7 +94,7 @@ export async function generateGeometry(imageUrl, opts = {}) {
 export async function generateTextured(imageUrl, opts = {}) {
   // Single-shot: generate textured GLB directly (fallback when geometry-frozen isn't possible)
   const queueResp = await falPost(HUNYUAN_ENDPOINT, {
-    image_url: imageUrl,
+    input_image_url: imageUrl,
     output_format: 'glb',
     do_remove_background: true,
     ...opts
