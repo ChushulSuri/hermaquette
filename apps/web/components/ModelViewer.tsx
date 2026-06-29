@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, memo } from 'react'
+import { useEffect, useRef } from 'react'
 
 interface ModelViewerProps {
   glbUrl: string
@@ -8,72 +8,65 @@ interface ModelViewerProps {
   environmentImage?: string
 }
 
-// Declare the model-viewer custom element type
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'model-viewer': React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement> & {
-          src?: string
-          alt?: string
-          'camera-controls'?: boolean | string
-          'auto-rotate'?: boolean | string
-          'shadow-intensity'?: string
-          exposure?: string
-          'environment-image'?: string
-          style?: React.CSSProperties
-        },
-        HTMLElement
-      >
-    }
+let scriptInjected = false
+function ensureScript() {
+  if (scriptInjected || typeof window === 'undefined') return
+  scriptInjected = true
+  if (customElements.get('model-viewer')) return
+  const script = document.createElement('script')
+  script.type = 'module'
+  script.src = '/model-viewer.min.js'
+  script.onerror = () => {
+    const fb = document.createElement('script')
+    fb.type = 'module'
+    fb.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js'
+    document.head.appendChild(fb)
   }
+  document.head.appendChild(script)
 }
 
-function ModelViewerInner({ glbUrl, alt = '3D model preview', className = '', environmentImage }: ModelViewerProps) {
-  const scriptLoaded = useRef(false)
+/**
+ * The <model-viewer> element is created IMPERATIVELY and reused across renders.
+ * Rendering it as JSX means router.refresh() (which re-runs the server component
+ * and rebuilds this subtree) re-creates the element and restarts the multi-MB GLB
+ * load — so the figure never finishes rendering. By owning the element in a ref
+ * and only updating its `src` when glbUrl changes, the load completes once and
+ * survives every refresh. This mirrors the imperative DOM approach that renders
+ * the colored model reliably.
+ */
+export function ModelViewer({ glbUrl, alt = '3D model preview', className = '', environmentImage = 'neutral' }: ModelViewerProps) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const mvRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
-    if (scriptLoaded.current) return
-    scriptLoaded.current = true
+    ensureScript()
+    const host = hostRef.current
+    if (!host) return
 
-    const script = document.createElement('script')
-    script.type = 'module'
-    // Prefer the local copy baked into public/ by the Dockerfile; fall back to CDN.
-    script.src = '/model-viewer.min.js'
-    script.onerror = () => {
-      const fallback = document.createElement('script')
-      fallback.type = 'module'
-      fallback.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js'
-      document.head.appendChild(fallback)
+    // Create once and keep it; on subsequent renders only update the src.
+    if (!mvRef.current) {
+      const mv = document.createElement('model-viewer')
+      mv.setAttribute('alt', alt)
+      mv.setAttribute('camera-controls', '')
+      mv.setAttribute('auto-rotate', '')
+      mv.setAttribute('shadow-intensity', '1')
+      mv.setAttribute('exposure', '1.1')
+      mv.setAttribute('environment-image', environmentImage)
+      mv.style.cssText = 'width:100%;height:400px;background:linear-gradient(135deg,#0f0020 0%,#1a0040 100%);border-radius:12px;'
+      mv.setAttribute('src', glbUrl)
+      host.appendChild(mv)
+      mvRef.current = mv
+    } else if (mvRef.current.getAttribute('src') !== glbUrl) {
+      mvRef.current.setAttribute('src', glbUrl)
     }
-    document.head.appendChild(script)
-  }, [])
+  }, [glbUrl, alt, environmentImage])
 
   return (
     <div className={`relative ${className}`}>
-      <model-viewer
-        src={glbUrl}
-        alt={alt}
-        camera-controls="true"
-        auto-rotate="true"
-        shadow-intensity="1"
-        exposure="1"
-        environment-image={environmentImage}
-        style={{
-          width: '100%',
-          height: '400px',
-          background: 'linear-gradient(135deg, #0f0020 0%, #1a0040 100%)',
-          borderRadius: '12px',
-        }}
-      />
+      <div ref={hostRef} />
       <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-black/50 px-2 py-1 rounded">
         Drag to rotate · Scroll to zoom
       </div>
     </div>
   )
 }
-
-// Memoize on glbUrl ONLY — the <model-viewer> custom element must not be
-// re-created on unrelated parent re-renders (SSE refreshes), or it restarts
-// the multi-MB GLB load and the figure never finishes rendering.
-export const ModelViewer = memo(ModelViewerInner, (prev, next) => prev.glbUrl === next.glbUrl)
