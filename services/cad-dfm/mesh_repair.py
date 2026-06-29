@@ -58,10 +58,15 @@ def _mesh_stats(mesh):
 
 
 def _load_mesh(stl_path):
-    """Load a mesh from STL/GLB/OBJ path."""
+    """Load a mesh from STL/GLB/OBJ path. DFM only needs geometry, so we strip
+    textures/materials and rebuild a clean Trimesh from vertices+faces — a
+    textured GLB can otherwise yield mesh.bounds == None and crash rescale."""
     mesh = trimesh.load(str(stl_path), force='mesh')
     if isinstance(mesh, trimesh.Scene):
         mesh = trimesh.util.concatenate(list(mesh.geometry.values()))
+    # Rebuild geometry-only so bounds are always valid (drops embedded textures).
+    if hasattr(mesh, 'vertices') and hasattr(mesh, 'faces') and len(mesh.faces) > 0:
+        mesh = trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces, process=True)
     return mesh
 
 
@@ -111,6 +116,11 @@ def _remove_small_components(mesh):
 def _rescale_to_target(mesh, target_mm):
     """Scale so the longest dimension = target_mm."""
     bounds = mesh.bounds
+    if bounds is None:
+        # Fallback when trimesh can't compute bounds — derive from vertices.
+        import numpy as np
+        v = np.asarray(mesh.vertices)
+        bounds = np.array([v.min(axis=0), v.max(axis=0)])
     dims = bounds[1] - bounds[0]
     longest = float(dims.max())
     if longest <= 0:

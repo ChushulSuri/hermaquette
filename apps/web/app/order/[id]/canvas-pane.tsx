@@ -33,6 +33,8 @@ interface CanvasPaneProps {
   dfmReport?: Record<string, unknown>
   glbUrl?: string
   spendCapCents: number
+  shipToCaptured?: boolean
+  shipToAddress?: Record<string, string>
 }
 
 export function CanvasPane({
@@ -45,11 +47,15 @@ export function CanvasPane({
   dfmReport,
   glbUrl,
   spendCapCents,
+  shipToCaptured,
+  shipToAddress,
 }: CanvasPaneProps) {
   const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(orderState)
   const showConceptGallery = (orderState === 'concept' || orderState === 'geometry_pending') && conceptImages.length > 0
   const showMoneyCard = ledger && ['quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(orderState)
-  const showPayButton = orderState === 'quote' && ledger
+  // Flow: quote → enter address → Pay → paid → governed vendor gate → done.
+  const showAddressForm = orderState === 'quote' && ledger && !shipToCaptured
+  const showPayButton = orderState === 'quote' && ledger && shipToCaptured
   const showVendorApproval = orderState === 'paid' && ledger
 
   return (
@@ -133,32 +139,46 @@ export function CanvasPane({
         </div>
       )}
 
-      {/* Pay Button */}
+      {/* Step 1 (quote): Shipping address — collected before payment */}
+      {showAddressForm && (
+        <div className="mb-6">
+          <AddressCapture orderId={orderId} />
+        </div>
+      )}
+
+      {/* Step 2 (quote, after address): Pay */}
       {showPayButton && ledger && (
         <div className="mb-6">
+          <div className="text-xs text-green-400 mb-2">✓ Shipping address confirmed — continue to payment</div>
           <PayButton orderId={orderId} revenueCents={ledger.revenue_cents!} currency={ledger.currency} />
         </div>
       )}
 
-      {/* Vendor Approval */}
+      {/* Captured address summary (shown once captured, from quote onward) */}
+      {shipToCaptured && shipToAddress && orderState !== 'quote' && (
+        <div className="mb-6 p-3 rounded-lg bg-gray-900/60 border border-gray-700 text-xs text-gray-300">
+          <span className="text-gray-500">Ships to: </span>
+          {shipToAddress.name}, {shipToAddress.street}, {shipToAddress.city} {shipToAddress.state} {shipToAddress.zip}, {shipToAddress.country}
+        </div>
+      )}
+
+      {/* Step 3 (paid): Governed vendor checkout — this is where WE pay Slant3D */}
       {showVendorApproval && ledger && (
         <div className="mb-6">
           <VendorApprovalPanel orderId={orderId} currency={ledger.currency} vendorCostCents={ledger.vendor_cost_cents} spendCapCents={spendCapCents} />
         </div>
       )}
 
-      {/* Checkout Approved + Address Capture */}
+      {/* Step 4 (checkout_approved): Done */}
       {orderState === 'checkout_approved' && (
-        <div className="mb-6">
-          <div className="p-4 rounded-xl bg-teal-900/30 border border-teal-700 mb-4">
-            <h2 className="text-lg font-semibold text-teal-300 mb-2">
-              <span className="text-teal-400">Governed checkout</span> approved
-            </h2>
-            <p className="text-sm text-gray-300">
-              The order has been approved for manufacturing. Enter a shipping address below.
-            </p>
-          </div>
-          <AddressCapture orderId={orderId} />
+        <div className="mb-6 p-4 rounded-xl bg-teal-900/30 border border-teal-700">
+          <h2 className="text-lg font-semibold text-teal-300 mb-2">
+            <span className="text-teal-400">Order complete</span> — vendor checkout approved
+          </h2>
+          <p className="text-sm text-gray-300">
+            Payment confirmed and governed vendor checkout approved. In production, Hermaquette
+            would now pay Slant3D to print and ship. <span className="text-gray-400">This is a demo — no real charge, nothing ships.</span>
+          </p>
         </div>
       )}
     </div>

@@ -1,16 +1,17 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface AddressCaptureProps {
   orderId: string
 }
 
 export function AddressCapture({ orderId }: AddressCaptureProps) {
+  const router = useRouter()
   const [form, setForm] = useState({ name: '', street: '', city: '', state: '', zip: '', country: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [saved, setSaved] = useState(false)
 
   const isValid = form.name && form.street && form.city && form.zip && form.country
 
@@ -26,31 +27,22 @@ export function AddressCapture({ orderId }: AddressCaptureProps) {
         body: JSON.stringify(form),
       })
       if (res.ok) {
-        setSaved(true)
+        // Re-render the page so the Pay button appears (shipToCaptured=true).
+        router.refresh()
       } else {
         const data = await res.json().catch(() => ({}))
         setError(data.error || 'Failed to save address')
+        setSubmitting(false)
       }
     } catch {
       setError('Network error')
+      setSubmitting(false)
     }
-    setSubmitting(false)
-  }
-
-  if (saved) {
-    return (
-      <div className="p-4 rounded-xl bg-teal-900/30 border border-teal-700">
-        <p className="text-teal-300 font-medium">✓ Address received</p>
-        <p className="text-sm text-gray-400 mt-1">
-          This is where it would ship. No order placed; nothing ships in the demo.
-        </p>
-      </div>
-    )
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <h3 className="text-sm font-medium text-gray-300">Shipping address (demo only — no order placed)</h3>
+      <h3 className="text-sm font-medium text-gray-300">Shipping address <span className="text-gray-500">— required before payment</span></h3>
       {[
         { key: 'name', label: 'Full name', placeholder: 'Jane Doe' },
         { key: 'street', label: 'Street address', placeholder: '123 Main St' },
@@ -76,9 +68,9 @@ export function AddressCapture({ orderId }: AddressCaptureProps) {
         disabled={!isValid || submitting}
         className="w-full bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
       >
-        {submitting ? 'Saving...' : 'Confirm address'}
+        {submitting ? 'Saving...' : 'Confirm address & continue to payment →'}
       </button>
-      <p className="text-xs text-gray-600">No payment charged, no order placed — this is demo data only.</p>
+      <p className="text-xs text-gray-600">Where your figure would ship. Demo only — no order placed.</p>
     </form>
   )
 }

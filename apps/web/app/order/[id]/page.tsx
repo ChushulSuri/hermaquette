@@ -92,6 +92,16 @@ export default function OrderPage({ params, searchParams }: PageProps) {
     try { dfmReport = typeof spec.dfm_report === 'string' ? JSON.parse(spec.dfm_report) : spec.dfm_report as Record<string, unknown> } catch { /* */ }
   }
 
+  // Shipping address is collected at the quote stage (before payment). Query the
+  // captured address (if any) to gate the Pay button and show it at the end.
+  const shipEvent = db.prepare(`
+    SELECT data FROM events WHERE order_id=? AND event='ship_to_captured'
+    ORDER BY created_at DESC LIMIT 1
+  `).get(params.id) as { data: string } | undefined
+  let shipToAddress: Record<string, string> | undefined
+  if (shipEvent?.data) { try { shipToAddress = JSON.parse(shipEvent.data) } catch { /* */ } }
+  const shipToCaptured = !!shipToAddress
+
   const badge = getStateBadge(order.state)
   const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved', 'geometry_pending'].includes(order.state)
   const showConceptGallery = (order.state === 'concept' || order.state === 'geometry_pending') && conceptImages.length > 0
@@ -150,6 +160,8 @@ export default function OrderPage({ params, searchParams }: PageProps) {
       dfmReport={dfmReport}
       glbUrl={glbUrl}
       spendCapCents={parseInt(process.env.SPEND_CAP_CENTS || '5000')}
+      shipToCaptured={shipToCaptured}
+      shipToAddress={shipToAddress}
     />
   )
 

@@ -10,8 +10,10 @@ export async function POST(
 
   const order = db.prepare('SELECT state FROM orders WHERE id = ?').get(id) as { state: string } | undefined
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-  if (order.state !== 'checkout_approved') {
-    return NextResponse.json({ error: 'Address can only be captured after checkout approval' }, { status: 400 })
+  // Address is collected at the quote stage — after the customer confirms the
+  // design, before payment (then we'd pay the vendor). Allow quote + paid states.
+  if (!['quote', 'paid'].includes(order.state)) {
+    return NextResponse.json({ error: 'Address can only be captured at the quote stage' }, { status: 400 })
   }
 
   let body: { name?: string; street?: string; city?: string; state?: string; zip?: string; country?: string }
@@ -30,10 +32,11 @@ export async function POST(
     country: body.country,
   }
 
-  // Store as event — no Slant3D order call, no payment, no fulfillment
+  // Store as event + mark captured — no Slant3D order call, no fulfillment.
   db.prepare(
     "INSERT INTO events (order_id, stage, event, message, data, created_at) VALUES (?, 'shipping', 'ship_to_captured', 'Shipping address captured (demo only)', ?, ?)"
   ).run(id, JSON.stringify(address), Date.now())
+  db.prepare("UPDATE orders SET ship_to_status='captured', updated_at=? WHERE id=?").run(Date.now(), id)
 
-  return NextResponse.json({ ok: true, message: 'Address captured — demo only, no order placed' })
+  return NextResponse.json({ ok: true, message: 'Address captured — continue to payment' })
 }
