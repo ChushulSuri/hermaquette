@@ -45,34 +45,6 @@ flowchart TB
 
 Each manufacturing operation is a Hermes skill (`SKILL.md` + `scripts/`). The agent runs `node /hermes/skills/hermaquette/<skill>/scripts/<file>.js <orderId>` via the terminal tool; scripts read their inputs from SQLite (no user text on the command line) and own every state transition.
 
-## Sponsor tech
-
-### Nous / Hermes
-- **Three real agents via native `delegate_task`** — Hermaquette → Sculptor → Follow-up, defined in `hermes/agents/*/AGENT.md`. The orchestrator's identity is `SOUL.md`; its playbook is `AGENTS.md` (loaded from `TERMINAL_CWD`); children are context-isolated.
-- **Proof of agency**: each delegated child writes its own `delegations` row from inside the child run — the on-screen "Hermaquette → Sculptor → Follow-up" attribution is backed by the database, not a hardcoded string.
-- **DFM self-improvement**: each FIXABLE failure appends a `## DFM Lesson` entry to `hermes/MEMORY.md`; later builds read it and pre-thicken before the gate.
-
-### NVIDIA Nemotron
-- **Nemotron (`llama-3.1-nemotron-70b-instruct`) explains the DFM result in plain English** when the Sculptor accepts or rejects a mesh. A second `hermes gateway` runs on port `:8643` against `integrate.api.nvidia.com/v1`; the `dfm_explanation` step routes there — Hermes makes the call, the app holds no NVIDIA credentials.
-- Geometry decisions stay deterministic; Nemotron handles language only. If `NEMOTRON_API_KEY` is absent, port 8643 isn't started and the step falls back to the primary gateway.
-
-### Stripe
-- **Customer leg**: hosted Stripe Checkout (test mode) created via the SDK and confirmed server-side by `sessions.retrieve` (no webhooks, idempotent).
-- **Vendor leg**: on human approval, Hermes issues a **test-mode Stripe Issuing virtual card** with `spending_limits` = spend cap and merchant-category scope — the agentic-commerce governance primitive. The card is **never charged**, and the gate fail-closes unless payment is confirmed *and* a human approved *and* the quote is under cap.
-
-## Honesty box
-
-| Claim | Reality |
-|-------|---------|
-| Stripe payments | TEST MODE — use card `4242 4242 4242 4242` |
-| Interactive viewer | Full-color PBR-textured GLB — orbit/zoom/rotate |
-| Printed artifact | Single material color (PA12 SLS) — full-color printing not supported |
-| Gross margin | Pre-fees only — Stripe fees and ops costs not deducted |
-| Vendor quote | Live Sculpteo API (or recorded fallback, labelled as such) |
-| Rights | One-off personal gift · not for resale · no affiliation with Nous/Hermes claimed |
-| Issuing card | Issued in test mode, demonstrated but never charged |
-| fal.ai spend | Hard $10 budget cap with per-call precheck |
-
 ## Quick start
 
 ```bash

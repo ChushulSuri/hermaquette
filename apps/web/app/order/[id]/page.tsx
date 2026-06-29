@@ -295,7 +295,7 @@ export default function OrderPage({ params, searchParams }: PageProps) {
 
       {/* Disclaimer */}
       <div className="mt-8 p-4 bg-gray-900/50 rounded-xl border border-gray-800 text-xs text-gray-500">
-        <strong className="text-gray-400">Honesty box:</strong>{' '}
+        <strong className="text-gray-400">Disclaimer:</strong>{' '}
         All Stripe charges are in TEST MODE (card 4242 4242 4242 4242).
         Gross margin shown is pre-fees, not profit.
         One-off personal gift — not for resale — no affiliation or endorsement with any depicted brand claimed.
