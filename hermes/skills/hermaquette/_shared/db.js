@@ -51,6 +51,8 @@ export function getDb() {
     "ALTER TABLE orders ADD COLUMN run2_run_id TEXT",
     "ALTER TABLE orders ADD COLUMN payment_confirmed_at INTEGER",
     "ALTER TABLE orders ADD COLUMN checkout_approved INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE orders ADD COLUMN reference_image_path TEXT",
+    "ALTER TABLE orders ADD COLUMN revision_n INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE spec ADD COLUMN approved_image_url TEXT",
   ]
   for (const col of agenticColumns) {

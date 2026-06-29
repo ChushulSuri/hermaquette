@@ -68,7 +68,7 @@ export function ConceptGallery({ orderId, images }: ConceptGalleryProps) {
         </button>
         {selected && (
           <p className="text-xs text-gray-400">
-            Hermes will build the 3D relief from this concept image
+            Hermes will build the 3D figure from this concept image
           </p>
         )}
       </div>

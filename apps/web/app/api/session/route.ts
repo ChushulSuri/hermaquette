@@ -1,6 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import { getAccessCode, makeAccessCookie, hasValidAccessCookie } from '@/lib/auth'
 import Stripe from 'stripe'
+
+export async function POST(req: NextRequest) {
+  const accessCode = getAccessCode()
+  if (!accessCode) {
+    // No access code configured — allow all (dev mode)
+    return NextResponse.json({ ok: true })
+  }
+
+  let body: { code?: string }
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const { code } = body
+  if (!code) {
+    return NextResponse.json({ error: 'Access code required' }, { status: 400 })
+  }
+
+  // Constant-time compare via hash
+  const crypto = await import('crypto')
+  const submitted = crypto.createHash('sha256').update(code.trim()).digest('hex')
+  const expected = crypto.createHash('sha256').update(accessCode).digest('hex')
+
+  if (submitted.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(submitted), Buffer.from(expected))) {
+    return NextResponse.json({ error: 'Invalid access code' }, { status: 401 })
+  }
+
+  const res = NextResponse.json({ ok: true })
+  res.headers.set('Set-Cookie', makeAccessCookie(accessCode))
+  return res
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)

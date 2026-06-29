@@ -4,4 +4,5 @@ export function validateEnv() {
   if (missing.length > 0) {
     throw new Error(`[hermaquette] Missing required env vars: ${missing.join(', ')}`)
   }
+  // ACCESS_CODE is optional — when set, gate blocks order creation without it
 }

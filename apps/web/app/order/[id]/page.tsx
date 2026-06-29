@@ -1,11 +1,8 @@
 import { notFound } from 'next/navigation'
 import { getDb } from '@/lib/db'
-import { ConceptGallery } from './concept-gallery'
-import { ModelViewerSection } from './model-viewer-section'
-import { MoneyCard } from './money-card'
-import { PayButton } from './pay-button'
-import { VendorApprovalPanel } from './vendor-approval'
-import { EventTimeline } from './event-timeline'
+import { SplitView } from './split-view'
+import { ChatPane } from './chat-pane'
+import { CanvasPane } from './canvas-pane'
 
 interface PageProps {
   params: { id: string }
@@ -78,14 +75,12 @@ export default function OrderPage({ params, searchParams }: PageProps) {
     FROM events WHERE order_id=? ORDER BY created_at DESC LIMIT 30
   `).all(params.id) as Array<{ id: number; stage: string; event: string; message: string; data: string; created_at: number }>
 
-  // Extract concept images
   const conceptEvent = events.find(e => e.event === 'images_ready')
   let conceptImages: Array<{ id: string; url: string }> = []
   if (conceptEvent?.data) {
     try { conceptImages = JSON.parse(conceptEvent.data).images || [] } catch { /* */ }
   }
 
-  // Parse DFM report
   let dfmReport: Record<string, unknown> | undefined
   if (spec?.dfm_report) {
     try { dfmReport = typeof spec.dfm_report === 'string' ? JSON.parse(spec.dfm_report) : spec.dfm_report as Record<string, unknown> } catch { /* */ }
@@ -98,209 +93,66 @@ export default function OrderPage({ params, searchParams }: PageProps) {
   const showPayButton = order.state === 'quote' && ledger
   const showVendorApproval = order.state === 'paid' && ledger
 
-  // GLB URL
   const artifactsDir = process.env.ARTIFACTS_DIR || '/artifacts'
   let glbUrl: string | undefined
   if (spec?.glb_path && typeof spec.glb_path === 'string') {
     glbUrl = `/api/artifacts${spec.glb_path.startsWith(artifactsDir) ? spec.glb_path.slice(artifactsDir.length) : spec.glb_path}`
   }
 
+  const leftPane = (
+    <div className="flex flex-col h-full">
+      {/* Description card */}
+      <div className="px-4 pt-4 pb-2">
+        <div className="rounded-xl p-3" style={{ background: '#111118', border: '1px solid #1e1e2e' }}>
+          <p className="text-xs mb-1" style={{ color: '#5a5a72' }}>Object description</p>
+          <p className="text-sm" style={{ color: '#f0f0f8' }}>{order.description}</p>
+          <div className="flex gap-4 mt-1.5 text-xs" style={{ color: '#5a5a72' }}>
+            <span>Material: <span className="uppercase" style={{ color: '#9090a8' }}>{spec?.material || order.material}</span></span>
+            {spec?.dimensions_mm && (
+              <span>Dims: {(() => {
+                try {
+                  const d = JSON.parse(spec.dimensions_mm as string)
+                  return `${d.x}×${d.y}×${d.z}mm`
+                } catch {
+                  return spec.dimensions_mm
+                }
+              })()}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Chat feed */}
+      <div className="flex-1 min-h-0">
+        <ChatPane
+          orderId={params.id}
+          initialEvents={events.slice().reverse()}
+          orderState={order.state}
+        />
+      </div>
+    </div>
+  )
+
+  const rightPane = (
+    <CanvasPane
+      orderId={params.id}
+      orderState={order.state}
+      badge={badge}
+      spec={spec}
+      ledger={ledger}
+      conceptImages={conceptImages}
+      dfmReport={dfmReport}
+      glbUrl={glbUrl}
+      spendCapCents={parseInt(process.env.SPEND_CAP_CENTS || '5000')}
+    />
+  )
+
   return (
-    <main className="min-h-screen p-4 md:p-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-300 mb-2 block">← New order</a>
-          <h1 className="text-2xl font-bold text-white">Order <span className="font-mono text-purple-400 text-lg">{params.id.slice(0, 8)}…</span></h1>
-        </div>
-        <div className={`px-4 py-2 rounded-full text-sm font-semibold ${badge.color}`}>
-          {badge.label}
-        </div>
-      </div>
-
-      {/* Description */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
-        <p className="text-sm text-gray-400 mb-1">Object description</p>
-        <p className="text-white">{order.description}</p>
-        <div className="flex gap-4 mt-2 text-xs text-gray-500">
-          <span>Material: <span className="text-gray-300 uppercase">{spec?.material || order.material}</span></span>
-          {spec?.dimensions_mm && (
-            <span>Dims: {(() => {
-              try {
-                const d = JSON.parse(spec.dimensions_mm as string)
-                return `${d.x}×${d.y}×${d.z}mm`
-              } catch {
-                return spec.dimensions_mm
-              }
-            })()}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Cancelled notice */}
-      {searchParams.cancelled && (
-        <div className="bg-yellow-900/50 border border-yellow-700 rounded-xl p-4 mb-6 text-yellow-200 text-sm">
-          Payment cancelled — you can try again below.
-        </div>
-      )}
-
-      {/* Error / blocked */}
-      {order.state === 'error' && (
-        <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6">
-          <p className="text-red-300 font-semibold">Pipeline error</p>
-          <p className="text-red-400 text-sm mt-1">{order.error_msg}</p>
-        </div>
-      )}
-      {order.state === 'blocked' && (
-        <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6">
-          <p className="text-red-300 font-semibold">Cannot manufacture in V1</p>
-          <p className="text-red-400 text-sm mt-1">{order.error_msg || dfmReport?.reason as string || 'DFM blocked — object exceeds manufacturable parameters'}</p>
-        </div>
-      )}
-
-      {/* Concept Gallery */}
-      {showConceptGallery && (
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-white mb-3">
-            <span className="text-purple-400">Hermes generated</span> concept directions
-          </h2>
-          <p className="text-sm text-gray-400 mb-4">
-            Select the direction that best captures the front-facing relief you want.
-            No hard price yet — indicative range based on complexity.
-          </p>
-          <ConceptGallery orderId={params.id} images={conceptImages} />
-        </div>
-      )}
-
-      {/* 3D Preview */}
-      {showViewer && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-white">
-              <span className="text-purple-400">Hermes built</span> the 3D relief
-            </h2>
-            <div className="flex gap-2">
-              {order.state === 'preview' && (
-                <span className="text-xs bg-indigo-900 border border-indigo-600 px-2 py-1 rounded text-indigo-200">
-                  Preview — DFM pending
-                </span>
-              )}
-              {order.state === 'manufacturable' && (
-                <span className="text-xs bg-green-900 border border-green-600 px-2 py-1 rounded text-green-200">
-                  Manufacturable ✓
-                </span>
-              )}
-            </div>
-          </div>
-
-          <ModelViewerSection glbUrl={glbUrl} orderId={params.id} orderState={order.state} />
-
-          {/* DFM result */}
-          {dfmReport && (
-            <div className={`mt-3 p-3 rounded-lg text-sm ${dfmReport.status === 'PASS' || dfmReport.status === 'PASS_AFTER_FIX' ? 'bg-green-900/40 border border-green-800' : 'bg-yellow-900/40 border border-yellow-800'}`}>
-              <p className="font-medium text-white">
-                DFM {dfmReport.status === 'PASS_AFTER_FIX' ? 'PASS (after auto-fix)' : dfmReport.status as string}
-              </p>
-              {dfmReport.explanation && <p className="text-gray-300 mt-1 text-xs">{dfmReport.explanation as string}</p>}
-              {dfmReport.material_recommendation && (
-                <p className="text-gray-400 mt-1 text-xs">
-                  Material recommendation: <span className="text-amber-300 uppercase font-medium">{dfmReport.material_recommendation as string}</span>
-                  {dfmReport.material_reason ? ` — ${dfmReport.material_reason as string}` : ''}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Money Card */}
-      {showMoneyCard && ledger && (
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-white mb-3">
-            <span className="text-purple-400">Hermes priced</span> the order
-          </h2>
-          <MoneyCard ledger={ledger} />
-        </div>
-      )}
-
-      {/* Pay Button */}
-      {showPayButton && ledger && (
-        <div className="mb-6">
-          <PayButton orderId={params.id} revenueCents={ledger.revenue_cents!} currency={ledger.currency} />
-        </div>
-      )}
-
-      {/* Paid confirmation */}
-      {order.state === 'paid' && (
-        <div className="bg-green-900/30 border border-green-700 rounded-xl p-4 mb-6">
-          <p className="text-green-300 font-semibold">✓ Payment confirmed (TEST MODE)</p>
-          <p className="text-green-400 text-sm mt-1">
-            Hermes is evaluating governed vendor checkout. Stripe test card used — no real charge.
-          </p>
-        </div>
-      )}
-
-      {/* Vendor Approval */}
-      {showVendorApproval && ledger && (
-        <div className="mb-6">
-          <VendorApprovalPanel orderId={params.id} currency={ledger.currency} vendorCostCents={ledger.vendor_cost_cents} spendCapCents={parseInt(process.env.SPEND_CAP_CENTS || '5000')} />
-        </div>
-      )}
-
-      {/* Checkout Approved */}
-      {order.state === 'checkout_approved' && (
-        <div className="bg-teal-900/30 border border-teal-700 rounded-xl p-6 mb-6">
-          <p className="text-teal-300 font-semibold mb-2">✓ Governed checkout approved</p>
-          <p className="text-teal-400 text-sm">
-            Governed approval record created (SQLite path). Execution gated until shipping address provided.
-          </p>
-          <div className="mt-4 p-3 bg-teal-900/50 rounded-lg border border-teal-800">
-            <p className="text-white font-medium text-sm">Want the totem?</p>
-            <p className="text-gray-300 text-sm mt-1">
-              Send a shipping address to the Nous/Hermes team and Hermaquette will 3D-print and ship this totem.
-              This checkout can go live — no code changes needed.
-            </p>
-          </div>
-          <p className="text-xs text-gray-500 mt-3">
-            One-off personal gift · Not for resale · No affiliation or endorsement claimed
-          </p>
-        </div>
-      )}
-
-      {/* Checkout Approving — in progress, not yet approved */}
-      {order.state === 'approving_checkout' && (
-        <div className="bg-amber-900/30 border border-amber-700 rounded-xl p-6 mb-6">
-          <p className="text-amber-300 font-semibold mb-2">⏳ Approving checkout…</p>
-          <p className="text-amber-400 text-sm">
-            Vendor checkout gate is running. Approval will appear here once the gate confirms.
-          </p>
-        </div>
-      )}
-
-      {/* Checkout Blocked — gate rejected */}
-      {order.state === 'checkout_blocked' && (
-        <div className="bg-red-900/30 border border-red-700 rounded-xl p-6 mb-6">
-          <p className="text-red-300 font-semibold mb-2">✗ Checkout blocked</p>
-          <p className="text-red-400 text-sm">
-            The vendor checkout gate rejected this order. Check the event log for details.
-          </p>
-        </div>
-      )}
-
-      {/* Event Timeline */}
-      <div className="mt-8">
-        <h2 className="text-sm font-medium text-gray-500 mb-3 uppercase tracking-wide">Hermes activity log</h2>
-        <EventTimeline events={events} orderId={params.id} />
-      </div>
-
-      {/* Disclaimer */}
-      <div className="mt-8 p-4 bg-gray-900/50 rounded-xl border border-gray-800 text-xs text-gray-500">
-        <strong className="text-gray-400">Disclaimer:</strong>{' '}
-        All Stripe charges are in TEST MODE (card 4242 4242 4242 4242).
-        Gross margin shown is pre-fees, not profit.
-        One-off personal gift — not for resale — no affiliation or endorsement with any depicted brand claimed.
-        {ledger?.quote_source === 'manual' && ' Quote is from a recorded capture (recording insurance) — not a live Sculpteo API quote.'}
-      </div>
-    </main>
+    <SplitView
+      orderId={params.id}
+      orderState={order.state}
+      left={leftPane}
+      right={rightPane}
+    />
   )
 }

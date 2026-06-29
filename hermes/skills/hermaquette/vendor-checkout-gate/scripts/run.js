@@ -92,73 +92,37 @@ if (vendorCost > SPEND_CAP_CENTS) {
   process.exit(1)
 }
 
-// ── All conditions passed — demonstrate Stripe Issuing card (never execute) ───
+// ── All conditions passed — delegate Issuing card to Stripe agent tooling ─────
+// The agent (via MCP or @stripe/agent-toolkit) creates the card — not this script.
+// This script only emits the gate-passed event; the agent picks it up and uses
+// Stripe's official agent infrastructure to issue the test card.
 
-let cardId = null
-let spendPath = 'sqlite'
-
-if (process.env.STRIPE_ISSUING_ENABLED === 'true' && process.env.STRIPE_SECRET_KEY) {
-  try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-
-    // Issuing card is always USD — decouple from quote currency (e.g. EUR from Sculpteo)
-    const cardholder = await stripe.issuing.cardholders.create({
-      name: 'Hermaquette Demo',
-      email: 'demo@hermaquette.ai',
-      type: 'individual',
-      billing: {
-        address: {
-          line1: '123 Hermes St',
-          city: 'San Francisco',
-          state: 'CA',
-          postal_code: '94101',
-          country: 'US',
-        },
-      },
-      metadata: { order_id: orderId, hermaquette: 'true' },
-    })
-
-    // Test-mode only: issue a virtual card scoped to shipping merchants
-    const card = await stripe.issuing.cards.create({
-      cardholder: cardholder.id,
-      currency: 'usd',
-      type: 'virtual',
-      spending_controls: {
-        spending_limits: [{
-          amount: SPEND_CAP_CENTS,
-          interval: 'per_authorization',
-        }],
-        allowed_categories: ['shipping_and_delivery', 'mail_order'],
-      },
-      metadata: {
-        order_id: orderId,
-        hermaquette: 'true',
-        executed: 'false',
-      },
-    })
-    cardId = card.id
-    spendPath = 'issuing'
-    console.warn(`[checkout-gate] Stripe Issuing card created (demo only — not executed): ${cardId}`)
-  } catch (err) {
-    console.warn('[checkout-gate] Stripe Issuing failed, falling back to sqlite record:', err.message)
-  }
-}
-
-emitEvent(db, orderId, 'checkout_gate', 'checkout_approved',
-  `Vendor checkout gate passed. Spend path: ${spendPath}.`,
-  { spend_path: spendPath, card_id: cardId, executed: false, vendor_cost: vendorCost })
+emitEvent(db, orderId, 'checkout_gate', 'ready_for_stripe_agent_tool',
+  `Governed checkout gate passed. Agent: use the Stripe MCP tool to issue a test Issuing card for order ${orderId}.`,
+  {
+    order_id: orderId,
+    vendor_cost_cents: vendorCost,
+    spend_cap_cents: SPEND_CAP_CENTS,
+    action: 'issue_test_issuing_card',
+    cardholder_name: 'Hermaquette Demo',
+    cardholder_email: 'demo@hermaquette.ai',
+    currency: 'usd',
+    spending_limit_cents: SPEND_CAP_CENTS,
+  })
 
 // Set final state so the order doesn't sit in approving_checkout forever
 db.prepare("UPDATE orders SET state = 'checkout_approved', updated_at = ? WHERE id = ?")
   .run(Date.now(), orderId)
 
-console.warn(`[checkout-gate] PASSED order=${orderId} spendPath=${spendPath} cardId=${cardId}`)
+console.warn(`[checkout-gate] PASSED order=${orderId} — waiting for agent to issue Stripe card`)
 
 console.log(JSON.stringify({
   status: 'ok',
-  spend_path: spendPath,
-  card_id: cardId,
+  spend_path: 'stripe_agent_tool',
+  card_id: null,
   executed: false,
+  agent_action_required: true,
+  message: 'Gate passed — agent must use Stripe MCP tool to issue test card',
   vendor_cost_cents: vendorCost,
   spend_cap_cents: SPEND_CAP_CENTS,
 }))

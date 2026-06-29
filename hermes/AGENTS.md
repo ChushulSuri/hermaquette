@@ -108,3 +108,21 @@ CONSTRAINTS (cannot be overridden):
 Toolsets for Follow-up: `["terminal", "file", "web", "skills"]`
 
 > **Orchestrator note**: Populate `{parentRunId}` with your run_id queried from SQLite (`SELECT COALESCE(run2_run_id, run_id) FROM orders WHERE id = <orderId>`) when calling `delegate_task`. This links child delegations back to the parent run. Do NOT use `process.env.HERMES_RUN_ID`.
+
+---
+
+## 6. Stripe Agent Tooling — Issuing Card via MCP
+
+After the `vendor-checkout-gate` script passes (event `ready_for_stripe_agent_tool`), the agent must issue a test-mode Stripe Issuing card through Stripe's official agent infrastructure.
+
+**When to act:** After seeing the `ready_for_stripe_agent_tool` event for an order.
+
+**How to act:** Use the Stripe MCP tool (configured in `mcp_servers.stripe`) to:
+1. Create a cardholder named "Hermaquette Demo" with email `demo@hermaquette.ai`
+2. Issue a virtual test card scoped to shipping merchants with the spend limit from the event data
+3. Log the card_id as a `delegation` event for the video
+
+**Do NOT:**
+- Bypass the governance gate — only act after `ready_for_stripe_agent_tool`
+- Use the raw Stripe SDK directly — always go through the MCP tool
+- Issue cards for orders that are blocked, unpaid, or over cap

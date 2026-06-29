@@ -43,6 +43,24 @@ display:
   streaming: false
 EOF
 
+# ── Stripe MCP server (agent-tooling story for judges) ────────────────────────
+# Adds Stripe's official MCP server so the agent can issue cards and create
+# payment links through Stripe's agent infrastructure.  The server is only
+# started when STRIPE_SECRET_KEY is set and starts with sk_test_ or rk_test_.
+if [ -n "${STRIPE_SECRET_KEY}" ] && echo "${STRIPE_SECRET_KEY}" | grep -qE '^(sk_test_|rk_test_)'; then
+  cat >> /root/.hermes/config.yaml <<MCPF
+mcp_servers:
+  stripe:
+    command: npx
+    args: ["-y", "@stripe/mcp-server"]
+    env:
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+MCPF
+  echo "[start] Stripe MCP server configured (test mode)"
+else
+  echo "[start] STRIPE_SECRET_KEY not set or not test-mode — Stripe MCP skipped"
+fi
+
 # ── Nemotron Hermes gateway config (NVIDIA — designated DFM/repair steps) ────
 # Uses a separate HERMES_HOME so it holds its own credentials and config.
 # OPENAI_API_KEY is passed as the provider key for the custom NVIDIA endpoint.

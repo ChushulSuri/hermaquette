@@ -55,7 +55,7 @@ export function ModelViewerSection({ glbUrl, orderId, orderState }: ModelViewerS
       {glbUrl ? (
         <ModelViewer
           glbUrl={glbUrl}
-          alt="3D relief preview"
+          alt="3D figure preview"
           className="w-full"
           environmentImage={HDRI_URL}
         />
