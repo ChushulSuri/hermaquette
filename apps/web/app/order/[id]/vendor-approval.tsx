@@ -30,7 +30,7 @@ export function VendorApprovalPanel({ orderId, currency, vendorCostCents, spendC
     <div className="bg-yellow-900/30 border border-yellow-700 rounded-xl p-6">
       <h3 className="text-yellow-300 font-semibold mb-2">Hermes awaits human approval</h3>
       <p className="text-gray-300 text-sm mb-4">
-        Hermes has evaluated the governed vendor checkout. Human approval required before proceeding.
+        Payment confirmed. Hermes now requests approval to pay the vendor (Slant3D) to manufacture — governed by a spend cap.
       </p>
 
       <div className="bg-gray-900/50 rounded-lg p-4 mb-4 space-y-2 text-sm">
@@ -48,7 +48,7 @@ export function VendorApprovalPanel({ orderId, currency, vendorCostCents, spendC
         </div>
         <div className="flex justify-between text-xs text-gray-500">
           <span>Execution</span>
-          <span className="text-red-400">GATED — address_pending</span>
+          <span className="text-amber-400">GATED — awaiting approval</span>
         </div>
       </div>
 
@@ -60,7 +60,7 @@ export function VendorApprovalPanel({ orderId, currency, vendorCostCents, spendC
         {approving ? 'Approving...' : `Approve vendor checkout (${ISSUING_ENABLED ? 'issue virtual card' : 'approve record'})`}
       </button>
       <p className="text-xs text-gray-500 mt-2 text-center">
-        No real purchase executed · Card never charged · Gated until shipping address provided
+        No real vendor payment executed · Demo only · Governed by spend cap + human approval
       </p>
     </div>
   )
