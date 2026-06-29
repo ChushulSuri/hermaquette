@@ -33,11 +33,14 @@ const PRINT_DISCLOSURE_STATES = new Set(['manufacturable', 'quote', 'paid', 'che
 export function ModelViewerSection({ glbUrl, orderId, orderState }: ModelViewerSectionProps) {
   const router = useRouter()
 
-  // Auto-refresh while in transient states
+  // Auto-refresh ONLY while still generating (no model yet). Once the GLB exists,
+  // stop — otherwise the periodic router.refresh() re-mounts <model-viewer> every
+  // 5s and restarts the (multi-MB) GLB load before it can finish rendering.
   useEffect(() => {
+    if (glbUrl) return
     const interval = setInterval(() => router.refresh(), 5000)
     return () => clearInterval(interval)
-  }, [router])
+  }, [router, glbUrl])
 
   const badge = getStateBadge(orderState)
   const showDisclosure = !!glbUrl && !!orderState && PRINT_DISCLOSURE_STATES.has(orderState)
