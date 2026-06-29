@@ -64,7 +64,10 @@ async function runDfmRepair(stlPath) {
 const artifactsBase = process.env.ARTIFACTS_DIR || '/artifacts'
 const tmpDir = join(artifactsBase, orderId, 'dfm')
 try { mkdirSync(tmpDir, { recursive: true }) } catch {}
-const tmpStl = join(tmpDir, `mesh_${orderId}_${attempt}.stl`)
+// Preserve the source extension — a Hunyuan GLB copied into a ".stl"-named file
+// makes trimesh parse GLB bytes as STL → 0 faces. cad-dfm loads any of stl/glb/obj.
+const srcExt = (stl_url.split('?')[0].match(/\.(glb|stl|obj|ply)$/i)?.[1] || 'glb').toLowerCase()
+const tmpStl = join(tmpDir, `mesh_${orderId}_${attempt}.${srcExt}`)
 
 if (stl_url.startsWith('/') || stl_url.startsWith('file://')) {
   // Local path — use directly (attempt 2 with repaired path from attempt 1)
