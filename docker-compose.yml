@@ -103,17 +103,6 @@ services:
       timeout: 10s
       retries: 3
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-    networks:
-      - hermaquette_net
-    restart: unless-stopped
-    depends_on:
-      - web
-
 volumes:
   sqlite_data:
   artifacts:
