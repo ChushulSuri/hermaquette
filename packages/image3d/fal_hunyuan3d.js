@@ -92,9 +92,12 @@ export async function generateGeometry(imageUrl, opts = {}) {
 }
 
 export async function generateTextured(imageUrl, opts = {}) {
-  // Single-shot: generate textured GLB directly (fallback when geometry-frozen isn't possible)
+  // Single-shot: generate a TEXTURED (colored) GLB. Without textured_mesh:true
+  // Hunyuan returns a 10MB geometry-only mesh (no materials → grey, and it fails
+  // to render in model-viewer). With it we get a ~3.5MB colored GLB.
   const queueResp = await falPost(HUNYUAN_ENDPOINT, {
     input_image_url: imageUrl,
+    textured_mesh: true,
     output_format: 'glb',
     do_remove_background: true,
     ...opts
