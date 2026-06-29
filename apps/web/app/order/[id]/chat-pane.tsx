@@ -227,6 +227,9 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
   const deltaBuffer = useRef('')
   const deltaTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const deltaBubbleId = useRef(`delta-${Date.now()}`)
+  // Tracks which state-change events already triggered a canvas refresh, so we
+  // don't re-mount the 3D <model-viewer> (and restart its GLB load) repeatedly.
+  const refreshedStates = useRef<Set<string>>(new Set())
 
   const appendBubble = useCallback((bubble: Bubble) => {
     if (seenIds.current.has(bubble.id)) return
@@ -280,7 +283,12 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
             flushDelta()
             setConnected(false)
             evtSource?.close()
-            router.refresh()
+            // Only refresh on stream end if a state-change refresh hasn't already
+            // covered it — avoids re-mounting the 3D <model-viewer> needlessly.
+            if (!refreshedStates.current.has('__stream_done__')) {
+              refreshedStates.current.add('__stream_done__')
+              router.refresh()
+            }
             return
           }
           if (evt.event === 'stream.error') {
@@ -295,8 +303,13 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
           }
           // Flush any pending delta before rendering a discrete event
           if (deltaBuffer.current) flushDelta()
-          // Trigger page refresh on state-change events so canvas pane updates
-          if (['images_ready', 'concept_approved', 'preview', 'manufacturable', 'quote', 'paid', 'checkout_approved'].includes(evt.event)) {
+          // Refresh the canvas ONCE per distinct state-change event. Refreshing on
+          // every duplicate event re-mounts <model-viewer> and restarts its GLB
+          // load, so the 3D figure never finishes rendering.
+          if (['images_ready', 'concept_approved', 'preview', 'manufacturable', 'quote', 'paid', 'checkout_approved'].includes(evt.event)
+              && !refreshedStates.current.has(evt.event)) {
+            refreshedStates.current.add(evt.event)
+            refreshedStates.current.delete('__stream_done__')
             router.refresh()
           }
           const bubble = eventToBubble(evt)
