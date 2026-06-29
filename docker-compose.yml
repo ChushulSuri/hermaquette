@@ -58,10 +58,10 @@ services:
       # Hermes gateways (started by start.sh inside this container)
       # Port 8642: primary (GPT-5.5/ChatGPT OAuth)  Port 8643: Nemotron (NVIDIA)
       - HERMES_API_KEY=${HERMES_API_KEY:-hermaquette-local}
-      - HERMES_LLM_PROVIDER=${HERMES_LLM_PROVIDER:-openai}
+      - HERMES_LLM_PROVIDER=${HERMES_LLM_PROVIDER:-openai-codex}
       - HERMES_LLM_MODEL=${HERMES_LLM_MODEL:-gpt-5.5}
       - HERMES_LLM_MODEL_API_FALLBACK=${HERMES_LLM_MODEL_API_FALLBACK:-gpt-4o}
-      - HERMES_REASONING_EFFORT=${HERMES_REASONING_EFFORT:-xhigh}
+      - HERMES_REASONING_EFFORT=${HERMES_REASONING_EFFORT:-high}
       - HERMES_GATEWAY_URL=http://127.0.0.1:8642/v1
       - HERMES_NEMOTRON_GATEWAY_URL=http://127.0.0.1:8643/v1
       # ChatGPT OAuth: copy contents of ~/.hermes/auth.json after `hermes setup --portal`

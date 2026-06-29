@@ -20,13 +20,13 @@ fi
 # ── Primary Hermes gateway config (GPT-5.5/ChatGPT OAuth, or gpt-4o fallback) ─
 cat > /root/.hermes/config.yaml <<EOF
 model:
-  provider: ${HERMES_LLM_PROVIDER:-openai}
+  provider: ${HERMES_LLM_PROVIDER:-openai-codex}
   default: $_hermes_model
 $_reasoning_line
 
 auxiliary:
   vision:
-    provider: ${HERMES_LLM_PROVIDER:-openai}
+    provider: ${HERMES_LLM_PROVIDER:-openai-codex}
     model: $_hermes_model
 
 memory:
