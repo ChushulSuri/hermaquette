@@ -1,7 +1,7 @@
 /**
  * Hunyuan3D v2 on fal.ai — primary image-to-3D provider.
  *
- * fal endpoint: "fal-ai/hunyuan3d-2" (image-to-3D)
+ * fal endpoint: "fal-ai/hunyuan3d/v2" (image-to-3D)
  * Pricing: ~$0.375/generation
  *
  * Geometry-frozen flow (KTD6):
@@ -12,7 +12,7 @@
  */
 
 const FAL_BASE = 'https://queue.fal.run'
-const HUNYUAN_ENDPOINT = 'fal-ai/hunyuan3d-2'
+const HUNYUAN_ENDPOINT = 'fal-ai/hunyuan3d/v2'
 
 function getFalKey() {
   const key = process.env.FAL_KEY
@@ -38,18 +38,24 @@ async function falPost(endpoint, body) {
   return resp.json()
 }
 
-async function falPollResult(endpoint, requestId, maxWaitMs = 120_000) {
+async function falPollResult(queueResp, maxWaitMs = 180_000) {
+  // Use the status_url / response_url fal returns — for sub-pathed apps (e.g.
+  // fal-ai/hunyuan3d/v2) the poll URL drops the variant, so reconstructing it
+  // from the submit endpoint is wrong. Fall back to reconstruction if absent.
+  const statusUrl = queueResp.status_url ||
+    `${FAL_BASE}/${queueResp._endpoint}/requests/${queueResp.request_id}/status`
+  const resultUrl = queueResp.response_url ||
+    `${FAL_BASE}/${queueResp._endpoint}/requests/${queueResp.request_id}`
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
-    const statusResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}/status`, {
+    const statusResp = await fetch(statusUrl, {
       headers: { 'Authorization': `Key ${getFalKey()}` }
     })
     if (!statusResp.ok) throw new Error(`fal status check failed: ${statusResp.status}`)
     const status = await statusResp.json()
 
     if (status.status === 'COMPLETED') {
-      // Fetch result
-      const resultResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}`, {
+      const resultResp = await fetch(resultUrl, {
         headers: { 'Authorization': `Key ${getFalKey()}` }
       })
       if (!resultResp.ok) throw new Error(`fal result fetch failed: ${resultResp.status}`)
@@ -58,7 +64,6 @@ async function falPollResult(endpoint, requestId, maxWaitMs = 120_000) {
     if (status.status === 'FAILED') {
       throw new Error(`fal.ai request failed: ${JSON.stringify(status)}`)
     }
-    // IN_QUEUE or IN_PROGRESS — wait
     await new Promise(r => setTimeout(r, 3000))
   }
   throw new Error(`fal.ai request timed out after ${maxWaitMs}ms`)
@@ -73,7 +78,7 @@ export async function generateGeometry(imageUrl, opts = {}) {
     // no texture for geometry pass
     ...opts
   })
-  const result = await falPollResult(HUNYUAN_ENDPOINT, queueResp.request_id)
+  const result = await falPollResult(queueResp)
 
   const meshUrl = result.model_mesh?.url || result.glb_url || result.mesh_url
   if (!meshUrl) throw new Error('No mesh URL in fal response: ' + JSON.stringify(result))
@@ -94,7 +99,7 @@ export async function generateTextured(imageUrl, opts = {}) {
     do_remove_background: true,
     ...opts
   })
-  const result = await falPollResult(HUNYUAN_ENDPOINT, queueResp.request_id)
+  const result = await falPollResult(queueResp)
 
   const glbUrl = result.model_mesh?.url || result.glb_url
   const stlUrl = result.model_mesh?.stl_url || null

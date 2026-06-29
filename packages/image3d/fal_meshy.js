@@ -1,11 +1,11 @@
 /**
  * Meshy v6 on fal.ai — fallback image-to-3D provider.
- * fal endpoint: "fal-ai/meshy-ai/image-to-3d"
+ * fal endpoint: "fal-ai/meshy/image-to-3d"
  * Pricing: ~$0.40-0.80/generation
  */
 
 const FAL_BASE = 'https://queue.fal.run'
-const MESHY_ENDPOINT = 'fal-ai/meshy-ai/image-to-3d'
+const MESHY_ENDPOINT = 'fal-ai/meshy/image-to-3d'
 
 function getFalKey() {
   const key = process.env.FAL_KEY
@@ -31,17 +31,22 @@ async function falPost(endpoint, body) {
   return resp.json()
 }
 
-async function falPollResult(endpoint, requestId, maxWaitMs = 180_000) {
+async function falPollResult(queueResp, maxWaitMs = 180_000) {
+  // Use the status_url/response_url fal returns (sub-pathed apps drop the variant).
+  const statusUrl = queueResp.status_url ||
+    `${FAL_BASE}/${queueResp._endpoint}/requests/${queueResp.request_id}/status`
+  const resultUrl = queueResp.response_url ||
+    `${FAL_BASE}/${queueResp._endpoint}/requests/${queueResp.request_id}`
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
-    const statusResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}/status`, {
+    const statusResp = await fetch(statusUrl, {
       headers: { 'Authorization': `Key ${getFalKey()}` }
     })
     if (!statusResp.ok) throw new Error(`meshy status check failed: ${statusResp.status}`)
     const status = await statusResp.json()
 
     if (status.status === 'COMPLETED') {
-      const resultResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}`, {
+      const resultResp = await fetch(resultUrl, {
         headers: { 'Authorization': `Key ${getFalKey()}` }
       })
       if (!resultResp.ok) throw new Error(`meshy result fetch failed: ${resultResp.status}`)
@@ -61,7 +66,7 @@ export async function generateTextured(imageUrl, opts = {}) {
     enable_pbr: true,
     ...opts
   })
-  const result = await falPollResult(MESHY_ENDPOINT, queueResp.request_id)
+  const result = await falPollResult(queueResp)
 
   const glbUrl = result.model_mesh?.url || result.glb_url
   const stlUrl = result.model_mesh?.stl_url || null
