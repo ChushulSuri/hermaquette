@@ -4,8 +4,7 @@
  *
  * Generates 3-4 concept images for an order using:
  *   1. Nano Banana Pro API (NANOBANANA_API_KEY) — primary
- *   2. OpenAI DALL-E 3 (OPENAI_API_KEY) — fallback
- *   3. Placeholder SVG — final fallback (never blocks pipeline)
+ *   2. Placeholder SVG — fallback (never blocks pipeline)
  *
  * Reads description from SQLite (no shell interpolation).
  * Usage: node run.js <orderId>
@@ -13,7 +12,6 @@
  * Exit: 0 on success, 1 on fatal error
  */
 import { nanoid } from 'nanoid'
-import OpenAI from 'openai'
 import { getDb, emitEvent } from '../../_shared/db.js'
 
 const orderId = process.argv[2]
@@ -80,26 +78,7 @@ if (nanoBananaKey) {
   }
 }
 
-// ── 2. DALL-E 3 fallback ────────────────────────────────────────────────────
-if (images.length < 3 && process.env.OPENAI_API_KEY) {
-  try {
-    console.warn('[concept] Falling back to DALL-E 3')
-    const oai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-    const dalleRes = await oai.images.generate({
-      model: 'dall-e-3',
-      prompt: imagePrompt,
-      n: 1,
-      size: '1024x1024',
-      quality: 'standard',
-    })
-    const url = dalleRes.data[0]?.url
-    if (url) images.push({ id: nanoid(), url, source: 'dalle3', variation: 1 })
-  } catch (err) {
-    console.warn('[concept] DALL-E 3 fallback failed:', err.message)
-  }
-}
-
-// ── 3. Placeholder fallback (never blocks pipeline) ────────────────────────
+// ── 2. Placeholder fallback (never blocks pipeline) ────────────────────────
 if (images.length === 0) {
   console.warn('[concept] No image provider available, using placeholder')
   const colors = ['1a0a3d/c0a060', '0d1f2d/a0c0ff', '1f0d2d/ff80c0']
