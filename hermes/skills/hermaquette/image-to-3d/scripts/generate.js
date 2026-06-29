@@ -62,9 +62,22 @@ try {
 
   const { glb_url, stl_url, geometry_hash } = result
 
+  // Download the GLB to the shared /artifacts volume so cad-dfm (separate
+  // container, same volume) can load it locally — trimesh can't fetch URLs,
+  // and the web viewer serves it via /api/artifacts. cad-dfm loads GLB with
+  // force='mesh', so the GLB path doubles as the DFM input (no STL from Hunyuan).
+  const fsm = await import('fs')
+  const artifactsDir = process.env.ARTIFACTS_DIR || '/artifacts'
+  const orderDir = `${artifactsDir}/${orderId}`
+  fsm.mkdirSync(orderDir, { recursive: true })
+  const localGlb = `${orderDir}/model.glb`
+  const glbResp = await fetch(glb_url)
+  if (!glbResp.ok) throw new Error(`Failed to download GLB: HTTP ${glbResp.status}`)
+  fsm.writeFileSync(localGlb, Buffer.from(await glbResp.arrayBuffer()))
+
   upsertSpec(db, orderId, {
-    glb_path: glb_url,
-    stl_path: stl_url,
+    glb_path: localGlb,
+    stl_path: localGlb,
     provenance: JSON.stringify({
       geometry_hash,
       image_url,
