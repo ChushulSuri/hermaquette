@@ -45,20 +45,23 @@ export async function POST(
     return NextResponse.json({ error: 'Revisions only available in concept state' }, { status: 400 })
   }
 
-  // Enforce cap
-  if (order.revision_n >= MAX_REVISIONS) {
+  // Atomic cap-and-increment: only bump revision_n if still under the cap AND in
+  // concept state. changes===0 means the cap was hit (or a concurrent request won
+  // the race) → reject. This keeps the 3-revision spend cap a hard guarantee (D6).
+  const now = Date.now()
+  const bumped = db.prepare(
+    'UPDATE orders SET revision_n = revision_n + 1, updated_at = ? WHERE id = ? AND state = ? AND revision_n < ?'
+  ).run(now, orderId, 'concept', MAX_REVISIONS)
+
+  if (bumped.changes === 0) {
+    const cur = db.prepare('SELECT revision_n FROM orders WHERE id = ?').get(orderId) as { revision_n: number } | undefined
     return NextResponse.json({
       error: `Maximum ${MAX_REVISIONS} revisions reached`,
-      revision_n: order.revision_n,
+      revision_n: cur?.revision_n ?? MAX_REVISIONS,
     }, { status: 400 })
   }
 
-  const now = Date.now()
-  const newRevisionN = order.revision_n + 1
-
-  // Update revision counter
-  db.prepare('UPDATE orders SET revision_n = ?, updated_at = ? WHERE id = ?')
-    .run(newRevisionN, now, orderId)
+  const newRevisionN = (db.prepare('SELECT revision_n FROM orders WHERE id = ?').get(orderId) as { revision_n: number }).revision_n
 
   // Emit revision event
   db.prepare("INSERT INTO events (order_id, stage, event, message, data, created_at) VALUES (?, 'concept', 'revision_requested', ?, ?, ?)")

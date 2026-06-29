@@ -38,14 +38,6 @@ if (!description) {
 emitEvent(db, orderId, 'concept', 'progress',
   'Hermes is generating concept images…', {})
 
-// Art-direction prompt: chunky full-3D figure style for fal.ai image-to-3D generation.
-// Single clean subject, no props/background, good depth cues for 3D reconstruction.
-const imagePrompt = `Chunky designer-toy / chibi-style 3D figure, full body visible and uncropped, \
-front-facing symmetrical standing pose, thick rounded limbs, arms slightly separated from the body, \
-clean white background, single subject, no props, no shadow, studio product photography: ${description}. \
-Bold shapes, clear silhouette, vibrant colors, suitable for 3D model generation. \
-NOT a coin, NOT a relief, NOT a plaque, NOT a depth map; no text, no logos, no watermark.`
-
 // Check for reference image
 const referenceImagePath = order.reference_image_path
 let referenceImageBase64 = null
@@ -68,7 +60,7 @@ let revisionPrompt = ''
 if (revisionN > 0) {
   const revisionEvent = db.prepare(
     "SELECT data FROM events WHERE order_id = ? AND event = 'revision_requested' ORDER BY created_at DESC LIMIT 1"
-  ).get(orderId) as { data: string } | undefined
+  ).get(orderId)
   if (revisionEvent?.data) {
     try {
       const parsed = JSON.parse(revisionEvent.data)

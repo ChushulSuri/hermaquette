@@ -16,7 +16,12 @@ export function getAccessCode(): string | undefined {
 
 export async function hasValidAccessCookie(req: NextRequest): Promise<boolean> {
   const accessCode = getAccessCode()
-  if (!accessCode) return true // no access code set → allow all (dev mode)
+  // Fail CLOSED: if ACCESS_CODE is unset, deny (plan U1 / D5). A missing env var
+  // must not silently disable the only budget gate. ACCESS_CODE must be set in prod.
+  if (!accessCode) {
+    console.warn('[auth] ACCESS_CODE not set — denying order creation (fail-closed)')
+    return false
+  }
 
   const cookieStore = await cookies()
   const cookieVal = cookieStore.get(COOKIE_NAME)?.value
@@ -31,9 +36,9 @@ export function hashAccessCode(code: string): string {
 }
 
 export function makeAccessCookie(code: string): string {
-  return `${COOKIE_NAME}=${hashAccessCode(code)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`
+  return `${COOKIE_NAME}=${hashAccessCode(code)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`
 }
 
 export function clearAccessCookie(): string {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
 }

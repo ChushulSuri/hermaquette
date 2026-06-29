@@ -19,26 +19,39 @@
  * @property {boolean} is_real_quote - Only true when quote_source is live_api or browser (R9)
  */
 
-import { quoteLiveApi } from './sculpteo_live.js'
+import { quoteLiveApi as quoteSlant3d } from './slant3d_live.js'
+import { quoteLiveApi as quoteSculpteo } from './sculpteo_live.js'
 import { quoteBrowser } from './sculpteo_browser.js'
 import { quoteManual } from './manual.js'
 
 /**
- * Get a vendor quote for an STL file, trying live API → browser → manual fallback.
+ * Get a vendor quote for an STL file, trying:
+ *   Slant3D live API → Sculpteo live API → browser scrape → manual fallback.
  * @param {QuoteRequest} req
  * @returns {Promise<QuoteResult>}
  */
 export async function quote(req) {
   const { stl_path, material, qty = 1 } = req
 
-  // Try live API first
+  // Try Slant3D live API first (self-serve key, primary vendor)
+  if (process.env.SLANT3D_API_KEY) {
+    try {
+      console.log('[vendor] Trying Slant3D live API...')
+      const result = await quoteSlant3d(stl_path, material, qty)
+      return { ...result, is_real_quote: true }
+    } catch (err) {
+      console.warn('[vendor] Slant3D API failed, trying next:', err.message)
+    }
+  }
+
+  // Try Sculpteo live API (if a partner key is configured)
   if (process.env.SCULPTEO_API_KEY) {
     try {
       console.log('[vendor] Trying live Sculpteo API...')
-      const result = await quoteLiveApi(stl_path, material, qty)
+      const result = await quoteSculpteo(stl_path, material, qty)
       return { ...result, is_real_quote: true }
     } catch (err) {
-      console.warn('[vendor] Live API failed, trying browser:', err.message)
+      console.warn('[vendor] Sculpteo API failed, trying browser:', err.message)
     }
   }
 
