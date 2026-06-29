@@ -25,17 +25,11 @@ p = pipeline('depth-estimation', model='depth-anything/Depth-Anything-V2-Small-h
 print('DA-V2 weights cached')" \
     || echo "[Dockerfile] DA-V2 pre-warm failed — will download on first request"
 
-# Bundle a free font for engraving text
-RUN mkdir -p /fonts && \
-    python -c "
-import urllib.request
-try:
-    url = 'https://github.com/liberationfonts/liberation-fonts/raw/main/LiberationSans-Regular.ttf'
-    urllib.request.urlretrieve(url, '/fonts/LiberationSans-Regular.ttf')
-    print('Font downloaded')
-except Exception as e:
-    print(f'Font download failed: {e} — will use fallback')
-"
+# Bundle a free font for engraving text (Liberation Sans via apt — robust, no build-time download)
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-liberation \
+    && mkdir -p /fonts \
+    && cp /usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf /fonts/LiberationSans-Regular.ttf \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV FONT_PATH=/fonts/LiberationSans-Regular.ttf
 ENV ARTIFACTS_DIR=/artifacts
