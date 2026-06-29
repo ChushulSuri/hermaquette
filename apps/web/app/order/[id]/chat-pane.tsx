@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface Event {
   id: number
@@ -210,6 +211,7 @@ function eventToBubble(evt: Event): Bubble | null {
 }
 
 export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) {
+  const router = useRouter()
   const [bubbles, setBubbles] = useState<Bubble[]>(() =>
     initialEvents
       .slice()
@@ -262,42 +264,67 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
     }, 300)
   }, [flushDelta])
 
-  // SSE subscription
+  // SSE subscription with reconnect + backoff
   useEffect(() => {
-    const evtSource = new EventSource(`/api/orders/${orderId}/events`)
-    evtSource.onmessage = (msg) => {
-      try {
-        const evt = JSON.parse(msg.data) as Event
-        if (evt.event === 'stream.complete') {
-          flushDelta()
-          setConnected(false)
-          evtSource.close()
-          return
-        }
-        if (evt.event === 'stream.error') {
-          return
-        }
-        if (evt.event === 'message.delta') {
-          const data = (() => { try { return JSON.parse(evt.data) } catch { return {} } })()
-          deltaBuffer.current += data.text || data.delta || data.content || ''
-          deltaBubbleId.current = deltaBubbleId.current || `delta-${Date.now()}`
-          scheduleFlush()
-          return
-        }
-        // Flush any pending delta before rendering a discrete event
-        if (deltaBuffer.current) flushDelta()
-        const bubble = eventToBubble(evt)
-        if (bubble) appendBubble(bubble)
-      } catch { /* malformed */ }
+    let evtSource: EventSource | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let reconnectDelay = 1000
+
+    function connect() {
+      evtSource = new EventSource(`/api/orders/${orderId}/events`)
+      evtSource.onmessage = (msg) => {
+        reconnectDelay = 1000
+        try {
+          const evt = JSON.parse(msg.data) as Event
+          if (evt.event === 'stream.complete') {
+            flushDelta()
+            setConnected(false)
+            evtSource?.close()
+            router.refresh()
+            return
+          }
+          if (evt.event === 'stream.error') {
+            return
+          }
+          if (evt.event === 'message.delta') {
+            const data = (() => { try { return JSON.parse(evt.data) } catch { return {} } })()
+            deltaBuffer.current += data.text || data.delta || data.content || ''
+            deltaBubbleId.current = deltaBubbleId.current || `delta-${Date.now()}`
+            scheduleFlush()
+            return
+          }
+          // Flush any pending delta before rendering a discrete event
+          if (deltaBuffer.current) flushDelta()
+          // Trigger page refresh on state-change events so canvas pane updates
+          if (['images_ready', 'concept_approved', 'preview', 'manufacturable', 'quote', 'paid', 'checkout_approved'].includes(evt.event)) {
+            router.refresh()
+          }
+          const bubble = eventToBubble(evt)
+          if (bubble) appendBubble(bubble)
+        } catch { /* malformed */ }
+      }
+      evtSource.onopen = () => {
+        setConnected(true)
+        reconnectDelay = 1000
+      }
+      evtSource.onerror = () => {
+        setConnected(false)
+        evtSource?.close()
+        reconnectTimer = setTimeout(() => {
+          reconnectDelay = Math.min(reconnectDelay * 2, 30000)
+          connect()
+        }, reconnectDelay)
+      }
     }
-    evtSource.onopen = () => setConnected(true)
-    evtSource.onerror = () => setConnected(false)
+
+    connect()
 
     return () => {
       if (deltaTimer.current) clearTimeout(deltaTimer.current)
-      evtSource.close()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      evtSource?.close()
     }
-  }, [orderId, appendBubble, flushDelta, scheduleFlush])
+  }, [orderId, appendBubble, flushDelta, scheduleFlush, router])
 
   // Auto-scroll to bottom
   useEffect(() => {

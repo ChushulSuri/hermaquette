@@ -1,5 +1,6 @@
 'use client'
 
+import { AddressCapture } from './address-capture'
 import { ConceptGallery } from './concept-gallery'
 import { ModelViewerSection } from './model-viewer-section'
 import { MoneyCard } from './money-card'
@@ -146,15 +147,18 @@ export function CanvasPane({
         </div>
       )}
 
-      {/* Checkout Approved Confirmation */}
+      {/* Checkout Approved + Address Capture */}
       {orderState === 'checkout_approved' && (
-        <div className="mb-6 p-4 rounded-xl bg-teal-900/30 border border-teal-700">
-          <h2 className="text-lg font-semibold text-teal-300 mb-2">
-            <span className="text-teal-400">Governed checkout</span> approved
-          </h2>
-          <p className="text-sm text-gray-300">
-            The order has been approved for manufacturing. In production, a virtual card would be issued and the order shipped.
-          </p>
+        <div className="mb-6">
+          <div className="p-4 rounded-xl bg-teal-900/30 border border-teal-700 mb-4">
+            <h2 className="text-lg font-semibold text-teal-300 mb-2">
+              <span className="text-teal-400">Governed checkout</span> approved
+            </h2>
+            <p className="text-sm text-gray-300">
+              The order has been approved for manufacturing. Enter a shipping address below.
+            </p>
+          </div>
+          <AddressCapture orderId={orderId} />
         </div>
       )}
     </div>
