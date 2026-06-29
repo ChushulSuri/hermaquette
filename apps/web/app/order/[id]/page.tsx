@@ -75,7 +75,13 @@ export default function OrderPage({ params, searchParams }: PageProps) {
     FROM events WHERE order_id=? ORDER BY created_at DESC LIMIT 30
   `).all(params.id) as Array<{ id: number; stage: string; event: string; message: string; data: string; created_at: number }>
 
-  const conceptEvent = events.find(e => e.event === 'images_ready')
+  // Query the latest images_ready event DIRECTLY — it can be hundreds of events
+  // back (gpt-5.5 streaming emits ~280 message.delta rows), so the LIMIT 30
+  // activity window above would miss it and the concept gallery would never show.
+  const conceptEvent = db.prepare(`
+    SELECT data FROM events WHERE order_id=? AND event='images_ready'
+    ORDER BY created_at DESC LIMIT 1
+  `).get(params.id) as { data: string } | undefined
   let conceptImages: Array<{ id: string; url: string }> = []
   if (conceptEvent?.data) {
     try { conceptImages = JSON.parse(conceptEvent.data).images || [] } catch { /* */ }

@@ -177,9 +177,9 @@ function eventToBubble(evt: Event): Bubble | null {
 
   // Tool events — show a human-readable label
   if (evt.event === 'tool.started' || evt.event === 'tool.completed') {
-    const toolName = data.tool || data.name || evt.stage
+    const toolName = data.tool || data.name || evt.stage || 'a step'
     const label = evt.event === 'tool.started'
-      ? `Running ${toolName}...`
+      ? `Working on ${toolName}...`
       : `${toolName} completed`
     return {
       id: `evt-${evt.id}`,
