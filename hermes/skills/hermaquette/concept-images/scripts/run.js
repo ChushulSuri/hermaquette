@@ -3,7 +3,7 @@
  * concept-images skill script
  *
  * Generates 3-4 concept images for an order using:
- *   1. Nano Banana Pro API (NANOBANANA_API_KEY) — primary
+ *   1. FAL gpt-image-2 via queue.fal.run (FAL_KEY) — primary
  *   2. Placeholder SVG — fallback (never blocks pipeline)
  *
  * Reads description from SQLite (no shell interpolation).
@@ -85,37 +85,68 @@ const versionLabel = revisionPrompt ? `v${revisionN + 1}` : 'v1'
 
 const images = []
 
-// ── 1. Nano Banana Pro ──────────────────────────────────────────────────────
-const nanoBananaKey = process.env.NANOBANANA_API_KEY
-if (nanoBananaKey) {
+// ── 1. FAL gpt-image-2 (Hermes native tool backend) ──────────────────────────
+const FAL_BASE = 'https://queue.fal.run'
+const GPT_IMAGE_ENDPOINT = 'fal-ai/gpt-image-2'
+const falKey = process.env.FAL_KEY
+
+async function falPost(endpoint, body) {
+  const resp = await fetch(`${FAL_BASE}/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${falKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!resp.ok) {
+    const text = await resp.text()
+    throw new Error(`fal.ai error ${resp.status}: ${text}`)
+  }
+  return resp.json()
+}
+
+async function falPollResult(endpoint, requestId, maxWaitMs = 120_000) {
+  const start = Date.now()
+  while (Date.now() - start < maxWaitMs) {
+    const statusResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}/status`, {
+      headers: { 'Authorization': `Key ${falKey}` }
+    })
+    if (!statusResp.ok) throw new Error(`fal status check failed: ${statusResp.status}`)
+    const status = await statusResp.json()
+
+    if (status.status === 'COMPLETED') {
+      const resultResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}`, {
+        headers: { 'Authorization': `Key ${falKey}` }
+      })
+      if (!resultResp.ok) throw new Error(`fal result fetch failed: ${resultResp.status}`)
+      return resultResp.json()
+    }
+    if (status.status === 'FAILED') {
+      throw new Error(`fal.ai request failed: ${JSON.stringify(status)}`)
+    }
+    await new Promise(r => setTimeout(r, 3000))
+  }
+  throw new Error(`fal.ai request timed out after ${maxWaitMs}ms`)
+}
+
+if (falKey) {
   for (let i = 0; i < 4; i++) {
     try {
       const payload = {
         prompt: `${imagePrompt} (variation ${i + 1})`,
-        model: 'nano-banana-pro',
+        model: 'gpt-image-2',
+        quality: 'medium',
       }
-      // Include reference image if available (image-guided generation)
       if (referenceImageBase64) {
         payload.image = `data:image/jpeg;base64,${referenceImageBase64}`
       }
-      const res = await fetch('https://api.nanobanana.ai/v1/images/generate', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${nanoBananaKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(30_000),
-      })
-      if (!res.ok) {
-        console.warn(`[concept] Nano Banana HTTP ${res.status} for variation ${i}`)
-        continue
-      }
-      const data = await res.json()
-      const url = data.url || data.data?.[0]?.url
-      if (url) images.push({ id: nanoid(), url, source: 'nanobanana', variation: i + 1, revision_n: revisionN })
+      const queueResp = await falPost(GPT_IMAGE_ENDPOINT, payload)
+      const result = await falPollResult(GPT_IMAGE_ENDPOINT, queueResp.request_id)
+      const url = result.images?.[0]?.url || result.data?.images?.[0]?.url
+      if (url) images.push({ id: nanoid(), url, source: 'gpt-image-2', variation: i + 1, revision_n: revisionN })
     } catch (err) {
-      console.warn(`[concept] Nano Banana variation ${i} failed:`, err.message)
+      console.warn(`[concept] gpt-image-2 variation ${i} failed:`, err.message)
     }
   }
 }

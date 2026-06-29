@@ -159,9 +159,29 @@ export async function POST(
 Customer approved concept image. Read the approved image URL from SQLite:
 SELECT approved_image_url FROM spec WHERE order_id = '${id}'
 
-Delegate to Sculptor via delegate_task with orderId, image_url (from query), and material (from orders table).
-Sculptor will run image-to-3d, DFM repair, then you run vendor-quote.
-Present the quote to the customer and STOP.`
+YOU must run these three scripts directly in sequence — do NOT delegate to a sub-agent:
+
+Step 1 — Generate 3D model:
+Run: node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js ${id}
+On success: state becomes preview. Note glb_url, stl_url, geometry_hash from stdout JSON.
+On error: set state to error via PATCH ${process.env.HERMES_GATEWAY_URL || 'http://hermes-agent:8642'}/v1/orders/${id} with { state: "error", error_msg: "<reason>" }. STOP.
+
+Step 2 — DFM repair:
+Run: node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js ${id} 1
+If status=PASS: proceed to Step 3.
+If status=FIXABLE: run again with attempt=2: node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js ${id} 2
+If still FIXABLE or BLOCKED after 2 attempts: set state to error with reason. STOP.
+
+Step 3 — Vendor quote:
+Run: node /hermes/skills/hermaquette/vendor-quote/scripts/run.js ${id}
+Present the quote result. STOP.
+
+CONSTRAINTS:
+- Run each script directly via terminal — do NOT use delegate_task
+- Each script reads orderId from argv and reads all data from SQLite
+- Maximum 2 DFM repair attempts
+- If any step fails fatally, set order state to error and STOP
+- After vendor-quote completes, the order is at quote state — await customer payment`
 
     try {
       // Pre-allocate a run_id so child can read it via COALESCE

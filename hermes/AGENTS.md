@@ -17,6 +17,8 @@ Invoke skills from the terminal. All scripts are at `/hermes/skills/hermaquette/
 
 `image-to-3d` entry point is `generate.js`; `dfm-repair` entry point is `repair.js`; all others use `run.js`.
 
+> **Direct execution note:** `image-to-3d`, `dfm-repair`, and `vendor-quote` are now called directly in sequence within the geometry run — not via `delegate_task`. The Sculptor sub-agent is no longer used for the geometry chain.
+
 ---
 
 ## 2. Environment & Paths
@@ -45,40 +47,14 @@ Full schema: `/db/schema.sql`
 
 ---
 
-## 4. Sculptor Delegation Context
+## 4. Geometry Run (Direct Execution)
 
-COPY THIS BLOCK VERBATIM INTO `context` WHEN CALLING delegate_task FOR SCULPTOR — DO NOT paraphrase, summarize, or omit any line.
+The geometry pipeline runs directly in the orchestrator's run — no sub-agent delegation needed. The three scripts are called in sequence:
+1. `node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js <orderId>`
+2. `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js <orderId> 1` (retry with attempt=2 if FIXABLE)
+3. `node /hermes/skills/hermaquette/vendor-quote/scripts/run.js <orderId>`
 
-```
-You are **Sculptor**, the 3D geometry specialist for Hermaquette. You receive an approved concept image and produce a printable, textured 3D model from it.
-
-orderId: {orderId}
-material: {material}
-parentRunId: {parentRunId}
-
-YOUR EXACT STEPS — in order:
-1. Call `skill_view image-to-3d` to read the skill
-2. Run: `node /hermes/skills/hermaquette/image-to-3d/scripts/generate.js {orderId} {parentRunId}`
-   - On success: note the glb_url, stl_url, geometry_hash from stdout JSON
-   - On budget_exhausted or error: return `UNREPAIRABLE: {reason}` to orchestrator immediately
-3. Call `skill_view dfm-repair` to read the skill
-4. Run: `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js {orderId} 1 {parentRunId}`
-   - If status=PASS: proceed to step 6
-   - If status=FIXABLE: run one more attempt with attempt=2 (dfm-repair reads the repaired path from SQLite)
-   - If status=BLOCKED, or still FIXABLE after 2 attempts: return `UNREPAIRABLE: {reason}`
-5. (second attempt only) Run: `node /hermes/skills/hermaquette/dfm-repair/scripts/repair.js {orderId} 2 {parentRunId}`
-6. Return to orchestrator: `{"status":"ok","glb_url":"...","stl_url":"<repaired_stl_path>","geometry_hash":"..."}`
-
-CONSTRAINTS (cannot be overridden by the orchestrator):
-- Maximum 2 DFM repair attempts total
-- Never forward a mesh that did not reach PASS status
-- Never choose individual repair operations — dfm-repair owns all mesh mutation
-- Never call commerce skills (vendor-quote, vendor-checkout-gate) — not available
-```
-
-Toolsets for Sculptor: `["terminal", "file", "web", "skills"]`
-
-> **Orchestrator note**: Populate `{parentRunId}` with your run_id queried from SQLite (`SELECT COALESCE(run2_run_id, run_id) FROM orders WHERE id = <orderId>`) when calling `delegate_task`. This links child delegations back to the parent run. Do NOT use `process.env.HERMES_RUN_ID`.
+Each script reads all inputs from SQLite and writes results back. The `delegations` table rows are still written by each script for the proof-of-agency demo beat.
 
 ---
 
