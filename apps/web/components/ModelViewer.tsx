@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, memo } from 'react'
 
 interface ModelViewerProps {
   glbUrl: string
@@ -29,7 +29,7 @@ declare global {
   }
 }
 
-export function ModelViewer({ glbUrl, alt = '3D model preview', className = '', environmentImage }: ModelViewerProps) {
+function ModelViewerInner({ glbUrl, alt = '3D model preview', className = '', environmentImage }: ModelViewerProps) {
   const scriptLoaded = useRef(false)
 
   useEffect(() => {
@@ -72,3 +72,8 @@ export function ModelViewer({ glbUrl, alt = '3D model preview', className = '', 
     </div>
   )
 }
+
+// Memoize on glbUrl ONLY — the <model-viewer> custom element must not be
+// re-created on unrelated parent re-renders (SSE refreshes), or it restarts
+// the multi-MB GLB load and the figure never finishes rendering.
+export const ModelViewer = memo(ModelViewerInner, (prev, next) => prev.glbUrl === next.glbUrl)

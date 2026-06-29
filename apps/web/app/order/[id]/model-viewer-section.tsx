@@ -3,7 +3,8 @@ import { ModelViewer } from '@/components/ModelViewer'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-const HDRI_URL = 'https://cdn.jsdelivr.net/npm/@google/model-viewer@3/examples/assets/neutral.hdr'
+// Use model-viewer's built-in "neutral" lighting (no external CDN dependency).
+const HDRI_URL = 'neutral'
 
 interface ModelViewerSectionProps {
   glbUrl?: string | null
