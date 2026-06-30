@@ -150,11 +150,14 @@ async function falPollResult(queueResp, endpoint, maxWaitMs = 120_000) {
 // referenceImageUrl). Use the gpt-image-2 EDIT endpoint (image-to-image) for it.
 async function generateOne(i, useReference) {
   if (useReference && referenceImageUrl) {
-    const editEndpoint = `${GPT_IMAGE_ENDPOINT}/edit-image`
+    // Correct fal image-to-image endpoint (per docs). input_fidelity:high keeps
+    // the result faithful to the uploaded reference.
+    const editEndpoint = 'openai/gpt-image-2/edit'
     const queueResp = await falPost(editEndpoint, {
       prompt: `${imagePrompt} (variation ${i + 1})`,
       image_urls: [referenceImageUrl],
       quality: 'medium',
+      input_fidelity: 'high',
     })
     return falPollResult(queueResp, editEndpoint)
   }
