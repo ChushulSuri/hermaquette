@@ -134,6 +134,16 @@ let dfmExplanation = null
 if (process.env.NEMOTRON_API_KEY) {
   try {
     const base = (process.env.NEMOTRON_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/$/, '')
+    // Pass a clean human summary (not raw JSON) so the reasoning model answers
+    // concisely. nemotron-3-ultra always reasons internally (reasoning_content),
+    // so budget enough max_tokens for reasoning + the final answer in content.
+    const mc = result.mesh_checks || {}
+    const dimsArr = Array.isArray(mc.dimensions_mm) ? mc.dimensions_mm.map((n) => Math.round(n)) : null
+    const summary = [
+      mc.is_watertight ? 'watertight (no holes)' : null,
+      mc.component_count === 1 ? 'a single solid piece' : null,
+      dimsArr ? `about ${dimsArr.join('×')}mm` : null,
+    ].filter(Boolean).join(', ') || 'manufacturable'
     const nemotronResp = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -142,15 +152,13 @@ if (process.env.NEMOTRON_API_KEY) {
       },
       body: JSON.stringify({
         model: process.env.NEMOTRON_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b',
-        // "detailed thinking off" → Nemotron answers directly instead of spending
-        // the token budget on visible reasoning (it's a reasoning model).
         messages: [
-          { role: 'system', content: 'detailed thinking off' },
-          { role: 'user', content: `In 2 short, friendly sentences, reassure a customer that their 3D-printed figurine passed manufacturability (DFM) checks and is ready to print. Be specific but non-technical. Checks: ${JSON.stringify(result.mesh_checks)}` },
+          { role: 'system', content: 'detailed thinking off. Output ONLY the final answer with no preamble or reasoning.' },
+          { role: 'user', content: `Write exactly 2 short, friendly sentences telling a customer their 3D-printed figurine passed all manufacturability checks (${summary}) and is ready to print. Non-technical.` },
         ],
-        max_tokens: 220,
+        max_tokens: 600,
       }),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(30_000),
     })
     if (nemotronResp.ok) {
       const nem = await nemotronResp.json()
