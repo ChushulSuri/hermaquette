@@ -72,11 +72,21 @@ async function resolveStlPath(stlPath) {
 const stlPath = await resolveStlPath(spec.stl_path)
 const material = spec.material || 'pa12'
 
-// Try the real adapter; fall back to a manual estimate
+// Read the DFM-measured model volume so the fallback estimate scales with the
+// actual figure (instead of a flat number).
+let volume_mm3 = 0
+try {
+  const dfmEvt = db.prepare(
+    "SELECT data FROM events WHERE order_id = ? AND event IN ('dfm_pass','dfm_pass_after_fix') ORDER BY created_at DESC LIMIT 1"
+  ).get(orderId)
+  if (dfmEvt?.data) volume_mm3 = Number(JSON.parse(dfmEvt.data)?.mesh_checks?.volume_mm3) || 0
+} catch { /* volume optional */ }
+
+// Try the real adapter; fall back to a manual (volume-based) estimate
 let quoteResult
 try {
   const { quote } = await import('/app/packages/vendor/adapter.js')
-  quoteResult = await quote({ stl_path: stlPath, material, qty: 1 })
+  quoteResult = await quote({ stl_path: stlPath, material, qty: 1, volume_mm3 })
 } catch (err) {
   console.warn('[vendor-quote] Adapter unavailable, using manual estimate:', err.message)
   quoteResult = {

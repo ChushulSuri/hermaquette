@@ -31,7 +31,7 @@ import { quoteManual } from './manual.js'
  * @returns {Promise<QuoteResult>}
  */
 export async function quote(req) {
-  const { stl_path, material, qty = 1 } = req
+  const { stl_path, material, qty = 1, volume_mm3 } = req
 
   // Try Slant3D live API first (self-serve key, primary vendor)
   if (process.env.SLANT3D_API_KEY) {
@@ -64,8 +64,8 @@ export async function quote(req) {
     console.warn('[vendor] Browser automation failed, using manual fallback:', err.message)
   }
 
-  // Manual / cached fallback (recording insurance)
+  // Manual / cached fallback (recording insurance) — volume-based estimate
   console.log('[vendor] Using manual/cached fallback quote')
-  const result = await quoteManual(stl_path, material, qty)
+  const result = await quoteManual(stl_path, material, qty, { volume_mm3 })
   return { ...result, is_real_quote: false }
 }
