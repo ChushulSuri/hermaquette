@@ -395,17 +395,22 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
   const [revisionError, setRevisionError] = useState('')
 
   async function handleRevise() {
-    if (!revisionText.trim() || submitting) return
+    const text = revisionText.trim()
+    if (!text || submitting) return
     setSubmitting(true)
     setRevisionError('')
     try {
       const res = await fetch(`/api/orders/${orderId}/revise`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: revisionText.trim() }),
+        body: JSON.stringify({ prompt: text }),
       })
       if (res.ok) {
         setRevisionText('')
+        // Echo the user's request immediately, and refresh so the canvas shows
+        // the "revising…" loader (revisionInProgress is computed server-side).
+        appendBubble({ id: `rev-${Date.now()}`, role: 'user', message: text, stage: 'concept', event: 'revision_requested', timestamp: Date.now(), icon: '✎' })
+        router.refresh()
       } else {
         const data = await res.json().catch(() => ({}))
         setRevisionError(data.error || 'Revision failed')
