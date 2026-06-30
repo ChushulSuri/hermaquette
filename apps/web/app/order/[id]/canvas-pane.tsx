@@ -125,12 +125,12 @@ export function CanvasPane({
 
           <ModelViewerSection glbUrl={glbUrl} orderId={orderId} orderState={orderState} />
 
-          {dfmReport && (
-            <div className={`mt-3 p-3 rounded-lg text-sm ${dfmReport.status === 'PASS' || dfmReport.status === 'PASS_AFTER_FIX' ? 'bg-green-900/40 border border-green-800' : 'bg-yellow-900/40 border border-yellow-800'}`}>
+          {(dfmReport || dfmExplanation) && (
+            <div className={`mt-3 p-3 rounded-lg text-sm ${!dfmReport || dfmReport.status === 'PASS' || dfmReport.status === 'PASS_AFTER_FIX' ? 'bg-green-900/40 border border-green-800' : 'bg-yellow-900/40 border border-yellow-800'}`}>
               <p className="font-medium text-white">
-                DFM {dfmReport.status === 'PASS_AFTER_FIX' ? 'PASS (after auto-fix)' : dfmReport.status as string}
+                DFM {dfmReport ? (dfmReport.status === 'PASS_AFTER_FIX' ? 'PASS (after auto-fix)' : dfmReport.status as string) : 'PASS ✓'}
               </p>
-              {dfmReport.explanation && <p className="text-gray-300 mt-1 text-xs">{dfmReport.explanation as string}</p>}
+              {dfmReport?.explanation && <p className="text-gray-300 mt-1 text-xs">{dfmReport.explanation as string}</p>}
               {dfmExplanation && (
                 <p className="mt-2 text-xs text-gray-300 border-t border-green-800/50 pt-2">
                   <span className="text-[#76b900] font-semibold">NVIDIA Nemotron</span>
@@ -138,7 +138,7 @@ export function CanvasPane({
                   {dfmExplanation}
                 </p>
               )}
-              {dfmReport.material_recommendation && (
+              {dfmReport?.material_recommendation && (
                 <p className="text-gray-400 mt-1 text-xs">
                   Material recommendation: <span className="text-amber-300 uppercase font-medium">{dfmReport.material_recommendation as string}</span>
                   {dfmReport.material_reason ? ` — ${dfmReport.material_reason as string}` : ''}
