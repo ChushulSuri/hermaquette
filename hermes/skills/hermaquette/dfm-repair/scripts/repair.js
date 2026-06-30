@@ -142,8 +142,13 @@ if (process.env.NEMOTRON_API_KEY) {
       },
       body: JSON.stringify({
         model: process.env.NEMOTRON_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b',
-        messages: [{ role: 'user', content: `In 2 short, friendly sentences, reassure a customer that their 3D-printed figurine passed manufacturability (DFM) checks and is ready to print. Be specific but non-technical. Checks: ${JSON.stringify(result.mesh_checks)}` }],
-        max_tokens: 160,
+        // "detailed thinking off" → Nemotron answers directly instead of spending
+        // the token budget on visible reasoning (it's a reasoning model).
+        messages: [
+          { role: 'system', content: 'detailed thinking off' },
+          { role: 'user', content: `In 2 short, friendly sentences, reassure a customer that their 3D-printed figurine passed manufacturability (DFM) checks and is ready to print. Be specific but non-technical. Checks: ${JSON.stringify(result.mesh_checks)}` },
+        ],
+        max_tokens: 220,
       }),
       signal: AbortSignal.timeout(20_000),
     })
