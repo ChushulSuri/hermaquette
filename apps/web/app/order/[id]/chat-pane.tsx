@@ -28,8 +28,34 @@ interface Bubble {
   icon?: string
 }
 
+// Agent-streamed text (message.delta) is the orchestrator "thinking out loud" —
+// it often dumps raw artifact URLs and per-order boilerplate ("Concept images are
+// ready for order X: 1. https://…"). Only surface short, clean sentences; the
+// curated discrete events below carry the real narrative.
+function isCleanAgentText(text: string): boolean {
+  const t = (text || '').trim()
+  if (!t) return false
+  if (/https?:\/\//.test(t)) return false                 // raw URLs
+  if (/order\s+[A-Za-z0-9_-]{6,}/i.test(t)) return false   // "order <id>" boilerplate
+  if (/concept images are ready/i.test(t)) return false    // agent self-instruction
+  if (t.length > 200) return false                         // long raw dumps
+  return true
+}
+
+// Collapse consecutive bubbles with identical text (the agent re-emits the same
+// message across runs / SSE reconnects).
+function dedupeConsecutive(bubbles: Bubble[]): Bubble[] {
+  return bubbles.filter((b, i) => i === 0 || b.message !== bubbles[i - 1].message || b.role !== bubbles[i - 1].role)
+}
+
 function eventToBubble(evt: Event): Bubble | null {
   const data = (() => { try { return JSON.parse(evt.data) } catch { return {} } })()
+
+  // Suppress internal agent-runtime noise — these aren't user-facing
+  // ("Working on skill_view…", "execute_code completed", "reasoning.available").
+  if (/^(reasoning|tool\.|skill_view|execute_code|message\.|stream\.|run\.|turn\.|agent\.)/.test(evt.event)) {
+    return null
+  }
 
   // Map event types to chat bubbles
   if (evt.event === 'started' && evt.stage === 'orchestrator') {
@@ -213,11 +239,13 @@ function eventToBubble(evt: Event): Bubble | null {
 export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) {
   const router = useRouter()
   const [bubbles, setBubbles] = useState<Bubble[]>(() =>
-    initialEvents
-      .slice()
-      .reverse() // chronological order (oldest first)
-      .map(eventToBubble)
-      .filter((b): b is Bubble => b !== null)
+    dedupeConsecutive(
+      initialEvents
+        .slice()
+        .reverse() // chronological order (oldest first)
+        .map(eventToBubble)
+        .filter((b): b is Bubble => b !== null)
+    )
   )
   const seenIds = useRef(new Set(bubbles.map(b => b.id)))
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -234,7 +262,12 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
   const appendBubble = useCallback((bubble: Bubble) => {
     if (seenIds.current.has(bubble.id)) return
     seenIds.current.add(bubble.id)
-    setBubbles(prev => [...prev, bubble])
+    setBubbles(prev => {
+      const last = prev[prev.length - 1]
+      // Skip consecutive duplicates (agent re-emits the same line across runs)
+      if (last && last.message === bubble.message && last.role === bubble.role) return prev
+      return [...prev, bubble]
+    })
   }, [])
 
   const flushDelta = useCallback(() => {
@@ -242,6 +275,13 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
     const text = deltaBuffer.current
     deltaBuffer.current = ''
     const id = deltaBubbleId.current
+    deltaBubbleId.current = `delta-${Date.now()}`
+    // Only surface clean agent narration — drop raw URL/boilerplate dumps.
+    if (!isCleanAgentText(text)) {
+      // Remove the in-progress delta bubble if it had already been shown.
+      if (seenIds.current.has(id)) setBubbles(prev => prev.filter(b => b.id !== id))
+      return
+    }
     if (seenIds.current.has(id)) {
       // Update existing delta bubble
       setBubbles(prev => prev.map(b => b.id === id ? { ...b, message: text } : b))
@@ -256,7 +296,6 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
         icon: '✦',
       })
     }
-    deltaBubbleId.current = `delta-${Date.now()}`
   }, [appendBubble])
 
   const scheduleFlush = useCallback(() => {
