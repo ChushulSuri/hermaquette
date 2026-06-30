@@ -2,7 +2,7 @@
 /**
  * vendor-quote skill script
  *
- * Calls the VendorQuoteAdapter to get a Sculpteo price for the STL.
+ * Calls the VendorQuoteAdapter to get a Slant3D price for the STL.
  * Computes service fee (10%) and writes the ledger row.
  *
  * Usage: node run.js <orderId>
@@ -39,7 +39,7 @@ if (spec.dfm_status !== 'PASS') {
 }
 
 emitEvent(db, orderId, 'quote', 'progress',
-  'Hermes is requesting a vendor quote from Sculpteo…', {})
+  'Hermes is requesting a vendor quote from Slant3D…', {})
 
 /**
  * Resolve the STL path from spec, handling file:// and HTTP URLs.
