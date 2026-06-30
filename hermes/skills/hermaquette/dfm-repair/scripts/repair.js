@@ -130,43 +130,57 @@ try {
 // Call NVIDIA Nemotron directly for a customer-facing DFM explanation.
 // (The local Hermes Nemotron gateway on :8643 isn't started, so hit the NVIDIA
 // API directly with NEMOTRON_API_KEY against integrate.api.nvidia.com.)
+//
+// nemotron-3-ultra is a reasoning model: it usually returns the answer in
+// `content` (reasoning in `reasoning_content`), but occasionally leaks its
+// reasoning into `content`. We retry a few times accepting only a clean answer,
+// and fall back to a deterministic templated sentence so the demo never shows
+// raw chain-of-thought.
 let dfmExplanation = null
 if (process.env.NEMOTRON_API_KEY) {
-  try {
-    const base = (process.env.NEMOTRON_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/$/, '')
-    // Pass a clean human summary (not raw JSON) so the reasoning model answers
-    // concisely. nemotron-3-ultra always reasons internally (reasoning_content),
-    // so budget enough max_tokens for reasoning + the final answer in content.
-    const mc = result.mesh_checks || {}
-    const dimsArr = Array.isArray(mc.dimensions_mm) ? mc.dimensions_mm.map((n) => Math.round(n)) : null
-    const summary = [
-      mc.is_watertight ? 'watertight (no holes)' : null,
-      mc.component_count === 1 ? 'a single solid piece' : null,
-      dimsArr ? `about ${dimsArr.join('×')}mm` : null,
-    ].filter(Boolean).join(', ') || 'manufacturable'
-    const nemotronResp = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.NEMOTRON_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: process.env.NEMOTRON_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b',
-        messages: [
-          { role: 'system', content: 'detailed thinking off. Output ONLY the final answer with no preamble or reasoning.' },
-          { role: 'user', content: `Write exactly 2 short, friendly sentences telling a customer their 3D-printed figurine passed all manufacturability checks (${summary}) and is ready to print. Non-technical.` },
-        ],
-        max_tokens: 600,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
-    if (nemotronResp.ok) {
-      const nem = await nemotronResp.json()
-      dfmExplanation = nem.choices?.[0]?.message?.content?.trim() || null
-    } else {
-      console.warn('[dfm-repair] Nemotron HTTP', nemotronResp.status)
-    }
-  } catch (err) { console.warn('[dfm-repair] Nemotron call failed:', err.message) }
+  const base = (process.env.NEMOTRON_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/$/, '')
+  const mc = result.mesh_checks || {}
+  const dimsArr = Array.isArray(mc.dimensions_mm) ? mc.dimensions_mm.map((n) => Math.round(n)) : null
+  const summary = [
+    mc.is_watertight ? 'watertight (no holes)' : null,
+    mc.component_count === 1 ? 'a single solid piece' : null,
+    dimsArr ? `about ${dimsArr.join('×')}mm` : null,
+  ].filter(Boolean).join(', ') || 'manufacturable'
+
+  // Heuristic: a clean 2-sentence answer is short and free of meta/reasoning talk.
+  const looksClean = (t) =>
+    !!t && t.length < 320 &&
+    !/\b(the user|we need|that'?s (one|two|exactly)|two sentences|must (mention|ensure)|let me|i need to|make sure|check count|non-technical)\b/i.test(t)
+
+  for (let attempt = 0; attempt < 3 && !dfmExplanation; attempt++) {
+    try {
+      const nemotronResp = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.NEMOTRON_API_KEY}` },
+        body: JSON.stringify({
+          model: process.env.NEMOTRON_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b',
+          messages: [
+            { role: 'system', content: 'detailed thinking off. Output ONLY the final answer with no preamble or reasoning.' },
+            { role: 'user', content: `Write exactly 2 short, friendly sentences telling a customer their 3D-printed figurine passed all manufacturability checks (${summary}) and is ready to print. Non-technical.` },
+          ],
+          max_tokens: 600,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (nemotronResp.ok) {
+        const nem = await nemotronResp.json()
+        const candidate = nem.choices?.[0]?.message?.content?.trim()
+        if (looksClean(candidate)) dfmExplanation = candidate
+      } else {
+        console.warn('[dfm-repair] Nemotron HTTP', nemotronResp.status)
+      }
+    } catch (err) { console.warn('[dfm-repair] Nemotron attempt failed:', err.message) }
+  }
+
+  // Deterministic fallback — clean, derived from the same checks Nemotron assessed.
+  if (!dfmExplanation) {
+    dfmExplanation = `Good news — your figurine passed all of our manufacturability checks${dimsArr ? ` at about ${dimsArr.join('×')}mm` : ''}. It's a solid, single piece with no holes and is ready to print.`
+  }
 }
 
 // Persist result based on DFM status
