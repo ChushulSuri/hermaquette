@@ -12,7 +12,7 @@
  */
 
 const FAL_BASE = 'https://queue.fal.run'
-const HUNYUAN_ENDPOINT = 'fal-ai/hunyuan3d/v2'
+const HUNYUAN_ENDPOINT = 'fal-ai/hunyuan-3d/v3.1/pro/image-to-3d'
 
 function getFalKey() {
   const key = process.env.FAL_KEY
@@ -92,27 +92,27 @@ export async function generateGeometry(imageUrl, opts = {}) {
 }
 
 export async function generateTextured(imageUrl, opts = {}) {
-  // Single-shot: generate a TEXTURED (colored) GLB. Without textured_mesh:true
-  // Hunyuan returns a 10MB geometry-only mesh (no materials → grey, and it fails
-  // to render in model-viewer). With it we get a ~3.5MB colored GLB.
+  // Hunyuan 3D Pro v3.1 — textured ("Normal") model with PBR materials. Much
+  // higher fidelity than v2 (esp. faces). face_count trades detail vs file size
+  // (~77 bytes/face → 150k ≈ ~11MB GLB). enable_pbr adds metallic/roughness/normal.
   const queueResp = await falPost(HUNYUAN_ENDPOINT, {
     input_image_url: imageUrl,
-    textured_mesh: true,
-    output_format: 'glb',
-    do_remove_background: true,
+    generate_type: 'Normal',
+    enable_pbr: true,
+    face_count: 150000,
     ...opts
   })
-  const result = await falPollResult(queueResp)
+  // v3.1 Pro can take 2–6 min — poll up to 6 min.
+  const result = await falPollResult(queueResp, 360_000)
 
-  const glbUrl = result.model_mesh?.url || result.glb_url
-  const stlUrl = result.model_mesh?.stl_url || null
+  const glbUrl = result.model_glb?.url || result.model_urls?.glb?.url || result.model_mesh?.url || result.glb_url
   if (!glbUrl) throw new Error('No GLB URL in fal response: ' + JSON.stringify(result))
 
   return {
     glb_url: glbUrl,
-    stl_url: stlUrl,
-    cost_usd: 0.375,
-    model: 'hunyuan3d-2',
+    stl_url: null, // v3.1 returns OBJ (large) not STL; DFM uses the downloaded GLB
+    cost_usd: 0.68, // base 0.375 + PBR 0.15 + custom face_count 0.15
+    model: 'hunyuan-3d-v3.1-pro',
     provider: 'hunyuan3d',
   }
 }
