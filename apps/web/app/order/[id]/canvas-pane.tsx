@@ -6,6 +6,7 @@ import { ModelViewerSection } from './model-viewer-section'
 import { MoneyCard } from './money-card'
 import { PayButton } from './pay-button'
 import { AutoCheckout } from './auto-checkout'
+import { RevisingLoader } from './revising-loader'
 
 interface Spec {
   dfm_report?: Record<string, unknown>
@@ -80,12 +81,7 @@ export function CanvasPane({
           <h2 className="text-lg font-semibold text-white mb-3">
             <span className="text-purple-400">Hermes generated</span> concept directions
           </h2>
-          {revisionInProgress && (
-            <div className="mb-4 p-4 rounded-xl bg-indigo-900/20 border border-indigo-800 flex items-center gap-3">
-              <div className="animate-spin w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full" />
-              <p className="text-sm text-indigo-300">Revising your concepts — generating a new set…</p>
-            </div>
-          )}
+          {revisionInProgress && <RevisingLoader />}
           <p className="text-sm text-gray-400 mb-4">
             Select the direction that best captures the full-3D figure you want.
             No hard price yet — indicative range based on complexity.
