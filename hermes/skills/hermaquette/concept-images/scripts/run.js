@@ -39,7 +39,14 @@ emitEvent(db, orderId, 'concept', 'progress',
   'Hermes is generating concept images…', {})
 
 // Reference image (if uploaded) is used via fal's edit endpoint below, by URL.
+// fal needs a reachable URL — our upload is already served at PUBLIC_BASE_URL/api/artifacts/...
 const referenceImagePath = order.reference_image_path
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '')
+const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || '/artifacts'
+let referenceImageUrl = null
+if (referenceImagePath && PUBLIC_BASE_URL && referenceImagePath.startsWith(ARTIFACTS_DIR)) {
+  referenceImageUrl = `${PUBLIC_BASE_URL}/api/artifacts${referenceImagePath.slice(ARTIFACTS_DIR.length)}`
+}
 
 // Check for revision prompt (from revise API)
 const revisionN = order.revision_n || 0
@@ -56,17 +63,23 @@ if (revisionN > 0) {
   }
 }
 
-// Art-direction prompt: chunky full-3D figure style for fal.ai image-to-3D generation.
-// Single clean subject, no props/background, good depth cues for 3D reconstruction.
-const basePrompt = `Chunky designer-toy / chibi-style 3D figure, full body visible and uncropped, \
-front-facing symmetrical standing pose, thick rounded limbs, arms slightly separated from the body, \
-clean white background, single subject, no props, no shadow, studio product photography: ${description}. \
-Bold shapes, clear silhouette, vibrant colors, suitable for 3D model generation. \
-NOT a coin, NOT a relief, NOT a plaque, NOT a depth map; no text, no logos, no watermark.`
+// Art-direction prompt: a single clean subject on a plain background, with
+// printability guidance so the generated image reconstructs into a clean mesh.
+const basePrompt = `Collectible 3D-printable figurine, full body visible and uncropped, \
+front-facing symmetrical standing pose, standing on a small round base, \
+clean white background, single subject, no extra props, soft studio product lighting: ${description}. \
+Bold clear silhouette, smooth printable surfaces, a single connected piece with no ultra-thin or \
+fragile floating parts (no loose hair wisps or thin antennae), minimal unsupported overhangs, \
+designed to 3D-print cleanly. No text, no logos, no watermark.`
 
-const imagePrompt = revisionPrompt
+// When a reference image is uploaded, keep the character recognizable.
+const adherenceClause = referenceImageUrl
+  ? ` Preserve the face, hairstyle and overall likeness of the character shown in the reference image and keep them clearly recognizable; invent only the outfit and body styling described above.`
+  : ''
+
+const imagePrompt = (revisionPrompt
   ? `${basePrompt} REVISED: ${revisionPrompt}`
-  : basePrompt
+  : basePrompt) + adherenceClause
 
 const versionLabel = revisionPrompt ? `v${revisionN + 1}` : 'v1'
 
@@ -95,13 +108,17 @@ async function falPost(endpoint, body) {
   return resp.json()
 }
 
-async function falPollResult(queueResp, maxWaitMs = 120_000) {
-  // Sub-pathed apps (e.g. .../edit-image) drop the variant in the poll URL, so
-  // use the status_url/response_url fal returns rather than reconstructing it.
+async function falPollResult(queueResp, endpoint, maxWaitMs = 120_000) {
+  // The returned status_url is reliable. But for sub-pathed apps (.../edit-image)
+  // fal returns a WRONG response_url (drops the variant → 404 "Path /edit-image
+  // not found"). So try the returned URL first, then the sub-path reconstructed
+  // from the submit endpoint.
   const statusUrl = queueResp.status_url ||
-    `${FAL_BASE}/${GPT_IMAGE_ENDPOINT}/requests/${queueResp.request_id}/status`
-  const resultUrl = queueResp.response_url ||
-    `${FAL_BASE}/${GPT_IMAGE_ENDPOINT}/requests/${queueResp.request_id}`
+    `${FAL_BASE}/${endpoint}/requests/${queueResp.request_id}/status`
+  const resultUrls = [...new Set([
+    queueResp.response_url,
+    `${FAL_BASE}/${endpoint}/requests/${queueResp.request_id}`,
+  ].filter(Boolean))]
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
     const statusResp = await fetch(statusUrl, {
@@ -111,11 +128,15 @@ async function falPollResult(queueResp, maxWaitMs = 120_000) {
     const status = await statusResp.json()
 
     if (status.status === 'COMPLETED') {
-      const resultResp = await fetch(resultUrl, {
-        headers: { 'Authorization': `Key ${falKey}` }, signal: AbortSignal.timeout(30_000),
-      })
-      if (!resultResp.ok) throw new Error(`fal result fetch failed: ${resultResp.status}`)
-      return resultResp.json()
+      let lastStatus = 0
+      for (const ru of resultUrls) {
+        const r = await fetch(ru, {
+          headers: { 'Authorization': `Key ${falKey}` }, signal: AbortSignal.timeout(30_000),
+        })
+        if (r.ok) return r.json()
+        lastStatus = r.status
+      }
+      throw new Error(`fal result fetch failed: ${lastStatus}`)
     }
     if (status.status === 'FAILED') {
       throw new Error(`fal.ai request failed: ${JSON.stringify(status)}`)
@@ -125,32 +146,24 @@ async function falPollResult(queueResp, maxWaitMs = 120_000) {
   throw new Error(`fal.ai request timed out after ${maxWaitMs}ms`)
 }
 
-// fal needs the reference as a URL, not inline base64. Our upload is already
-// served publicly at PUBLIC_BASE_URL/api/artifacts/... — use the gpt-image-2
-// EDIT endpoint with that URL (image-to-image). Inline base64 on the text
-// endpoint hangs and never returns.
-let referenceImageUrl = null
-const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '')
-const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || '/artifacts'
-if (referenceImagePath && PUBLIC_BASE_URL && referenceImagePath.startsWith(ARTIFACTS_DIR)) {
-  referenceImageUrl = `${PUBLIC_BASE_URL}/api/artifacts${referenceImagePath.slice(ARTIFACTS_DIR.length)}`
-}
-
+// fal needs the reference as a URL, not inline base64 (computed near the top as
+// referenceImageUrl). Use the gpt-image-2 EDIT endpoint (image-to-image) for it.
 async function generateOne(i, useReference) {
   if (useReference && referenceImageUrl) {
-    const queueResp = await falPost(`${GPT_IMAGE_ENDPOINT}/edit-image`, {
+    const editEndpoint = `${GPT_IMAGE_ENDPOINT}/edit-image`
+    const queueResp = await falPost(editEndpoint, {
       prompt: `${imagePrompt} (variation ${i + 1})`,
       image_urls: [referenceImageUrl],
       quality: 'medium',
     })
-    return falPollResult(queueResp)
+    return falPollResult(queueResp, editEndpoint)
   }
   const queueResp = await falPost(GPT_IMAGE_ENDPOINT, {
     prompt: `${imagePrompt} (variation ${i + 1})`,
     model: 'gpt-image-2',
     quality: 'medium',
   })
-  return falPollResult(queueResp)
+  return falPollResult(queueResp, GPT_IMAGE_ENDPOINT)
 }
 
 async function runVariations(useReference) {
