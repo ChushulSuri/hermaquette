@@ -64,3 +64,6 @@ coverage/
 
 # Misc
 .turbo/
+
+# Internal docs — not published to the public repo
+docs/

@@ -95,13 +95,14 @@ hermaquette/
 ├── packages/image3d/             # fal.ai adapter (Hunyuan3D → Meshy fallback) + budget guard
 ├── packages/vendor/              # Sculpteo VendorQuoteAdapter (live / browser / manual)
 ├── db/schema.sql                 # SQLite schema
-├── docker-compose.yml            # web · hermes-agent · cad-dfm
-└── docs/runbook-coolify-digitalocean.md
+└── docker-compose.yml            # web · hermes-agent · cad-dfm
 ```
 
 ## Deployment
 
-See [`docs/runbook-coolify-digitalocean.md`](./docs/runbook-coolify-digitalocean.md) for the full Coolify + DigitalOcean VPS guide.
+Containerized via `docker-compose.yml` (web · hermes-agent · cad-dfm). Build the
+images and run the stack with Docker Compose; `scripts/deploy-droplet.sh` is a
+reference build-and-recreate flow to run on the target host.
 
 > **Note:** `hermes-runtime/` is a git submodule. Clone with `git clone --recurse-submodules` (or run `git submodule update --init` after cloning), or the Hermes runtime build fails.
 
