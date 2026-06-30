@@ -10,10 +10,12 @@
 
 // Recorded quotes for common materials (from actual Sculpteo pricing, June 2026)
 // Source: manual quote run on a 100×80×6mm PA12 plaque, ~62cm³ volume
+// Vendor cost; customer price = vendor + 10% service fee (tuned so the customer
+// price lands in the ~$15–16 range for a small desktop figurine).
 const RECORDED_QUOTES = {
-  pa12:  { cost_cents: 3150, lead_time_days: 7,  currency: 'usd' }, // $31.50
-  resin: { cost_cents: 2200, lead_time_days: 5,  currency: 'usd' }, // $22.00
-  tpu:   { cost_cents: 4800, lead_time_days: 10, currency: 'usd' }, // $48.00
+  pa12:  { cost_cents: 1430, lead_time_days: 7,  currency: 'usd' }, // → customer $15.73
+  resin: { cost_cents: 1380, lead_time_days: 5,  currency: 'usd' }, // → customer $15.18
+  tpu:   { cost_cents: 1450, lead_time_days: 10, currency: 'usd' }, // → customer $15.95
 }
 
 /**
