@@ -38,21 +38,8 @@ if (!description) {
 emitEvent(db, orderId, 'concept', 'progress',
   'Hermes is generating concept images…', {})
 
-// Check for reference image
+// Reference image (if uploaded) is used via fal's edit endpoint below, by URL.
 const referenceImagePath = order.reference_image_path
-let referenceImageBase64 = null
-if (referenceImagePath) {
-  try {
-    const fs = await import('fs')
-    if (fs.existsSync(referenceImagePath)) {
-      const buf = fs.readFileSync(referenceImagePath)
-      referenceImageBase64 = buf.toString('base64')
-      console.warn(`[concept] Using reference image: ${referenceImagePath}`)
-    }
-  } catch (err) {
-    console.warn(`[concept] Failed to read reference image:`, err.message)
-  }
-}
 
 // Check for revision prompt (from revise API)
 const revisionN = order.revision_n || 0
@@ -91,6 +78,7 @@ const GPT_IMAGE_ENDPOINT = 'fal-ai/gpt-image-2'
 const falKey = process.env.FAL_KEY
 
 async function falPost(endpoint, body) {
+  // AbortSignal timeout so a slow/large request can never hang the run forever.
   const resp = await fetch(`${FAL_BASE}/${endpoint}`, {
     method: 'POST',
     headers: {
@@ -98,6 +86,7 @@ async function falPost(endpoint, body) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
   })
   if (!resp.ok) {
     const text = await resp.text()
@@ -106,18 +95,24 @@ async function falPost(endpoint, body) {
   return resp.json()
 }
 
-async function falPollResult(endpoint, requestId, maxWaitMs = 120_000) {
+async function falPollResult(queueResp, maxWaitMs = 120_000) {
+  // Sub-pathed apps (e.g. .../edit-image) drop the variant in the poll URL, so
+  // use the status_url/response_url fal returns rather than reconstructing it.
+  const statusUrl = queueResp.status_url ||
+    `${FAL_BASE}/${GPT_IMAGE_ENDPOINT}/requests/${queueResp.request_id}/status`
+  const resultUrl = queueResp.response_url ||
+    `${FAL_BASE}/${GPT_IMAGE_ENDPOINT}/requests/${queueResp.request_id}`
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
-    const statusResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}/status`, {
-      headers: { 'Authorization': `Key ${falKey}` }
+    const statusResp = await fetch(statusUrl, {
+      headers: { 'Authorization': `Key ${falKey}` }, signal: AbortSignal.timeout(30_000),
     })
     if (!statusResp.ok) throw new Error(`fal status check failed: ${statusResp.status}`)
     const status = await statusResp.json()
 
     if (status.status === 'COMPLETED') {
-      const resultResp = await fetch(`${FAL_BASE}/${endpoint}/requests/${requestId}`, {
-        headers: { 'Authorization': `Key ${falKey}` }
+      const resultResp = await fetch(resultUrl, {
+        headers: { 'Authorization': `Key ${falKey}` }, signal: AbortSignal.timeout(30_000),
       })
       if (!resultResp.ok) throw new Error(`fal result fetch failed: ${resultResp.status}`)
       return resultResp.json()
@@ -130,24 +125,54 @@ async function falPollResult(endpoint, requestId, maxWaitMs = 120_000) {
   throw new Error(`fal.ai request timed out after ${maxWaitMs}ms`)
 }
 
-if (falKey) {
+// fal needs the reference as a URL, not inline base64. Our upload is already
+// served publicly at PUBLIC_BASE_URL/api/artifacts/... — use the gpt-image-2
+// EDIT endpoint with that URL (image-to-image). Inline base64 on the text
+// endpoint hangs and never returns.
+let referenceImageUrl = null
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '')
+const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || '/artifacts'
+if (referenceImagePath && PUBLIC_BASE_URL && referenceImagePath.startsWith(ARTIFACTS_DIR)) {
+  referenceImageUrl = `${PUBLIC_BASE_URL}/api/artifacts${referenceImagePath.slice(ARTIFACTS_DIR.length)}`
+}
+
+async function generateOne(i, useReference) {
+  if (useReference && referenceImageUrl) {
+    const queueResp = await falPost(`${GPT_IMAGE_ENDPOINT}/edit-image`, {
+      prompt: `${imagePrompt} (variation ${i + 1})`,
+      image_urls: [referenceImageUrl],
+      quality: 'medium',
+    })
+    return falPollResult(queueResp)
+  }
+  const queueResp = await falPost(GPT_IMAGE_ENDPOINT, {
+    prompt: `${imagePrompt} (variation ${i + 1})`,
+    model: 'gpt-image-2',
+    quality: 'medium',
+  })
+  return falPollResult(queueResp)
+}
+
+async function runVariations(useReference) {
   for (let i = 0; i < 4; i++) {
     try {
-      const payload = {
-        prompt: `${imagePrompt} (variation ${i + 1})`,
-        model: 'gpt-image-2',
-        quality: 'medium',
-      }
-      if (referenceImageBase64) {
-        payload.image = `data:image/jpeg;base64,${referenceImageBase64}`
-      }
-      const queueResp = await falPost(GPT_IMAGE_ENDPOINT, payload)
-      const result = await falPollResult(GPT_IMAGE_ENDPOINT, queueResp.request_id)
+      const result = await generateOne(i, useReference)
       const url = result.images?.[0]?.url || result.data?.images?.[0]?.url
-      if (url) images.push({ id: nanoid(), url, source: 'gpt-image-2', variation: i + 1, revision_n: revisionN })
+      if (url) images.push({ id: nanoid(), url, source: useReference ? 'gpt-image-2-edit' : 'gpt-image-2', variation: i + 1, revision_n: revisionN })
     } catch (err) {
-      console.warn(`[concept] gpt-image-2 variation ${i} failed:`, err.message)
+      console.warn(`[concept] variation ${i} (${useReference ? 'edit' : 'text'}) failed:`, err.message)
     }
+  }
+}
+
+if (falKey) {
+  const useRef = !!referenceImageUrl
+  if (useRef) console.warn(`[concept] reference image → edit endpoint: ${referenceImageUrl}`)
+  await runVariations(useRef)
+  // If the image-to-image path produced nothing, fall back to reliable text-only.
+  if (images.length === 0 && useRef) {
+    console.warn('[concept] reference-edit produced no images — falling back to text-only')
+    await runVariations(false)
   }
 }
 
