@@ -36,6 +36,7 @@ interface CanvasPaneProps {
   spendCapCents: number
   shipToCaptured?: boolean
   shipToAddress?: Record<string, string>
+  revisionInProgress?: boolean
 }
 
 export function CanvasPane({
@@ -50,6 +51,7 @@ export function CanvasPane({
   glbUrl,
   shipToCaptured,
   shipToAddress,
+  revisionInProgress,
 }: CanvasPaneProps) {
   const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved', 'approving_checkout'].includes(orderState)
   const showConceptGallery = (orderState === 'concept' || orderState === 'geometry_pending') && conceptImages.length > 0
@@ -72,17 +74,27 @@ export function CanvasPane({
         </div>
       </div>
 
-      {/* Concept Gallery */}
-      {showConceptGallery && (
+      {/* Concept Gallery (also shown while a revision regenerates) */}
+      {(showConceptGallery || (revisionInProgress && orderState === 'concept')) && (
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-white mb-3">
             <span className="text-purple-400">Hermes generated</span> concept directions
           </h2>
+          {revisionInProgress && (
+            <div className="mb-4 p-4 rounded-xl bg-indigo-900/20 border border-indigo-800 flex items-center gap-3">
+              <div className="animate-spin w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full" />
+              <p className="text-sm text-indigo-300">Revising your concepts — generating a new set…</p>
+            </div>
+          )}
           <p className="text-sm text-gray-400 mb-4">
             Select the direction that best captures the full-3D figure you want.
             No hard price yet — indicative range based on complexity.
           </p>
-          <ConceptGallery orderId={orderId} images={conceptImages} />
+          {conceptImages.length > 0 && (
+            <div className={revisionInProgress ? 'opacity-40 pointer-events-none' : ''}>
+              <ConceptGallery orderId={orderId} images={conceptImages} />
+            </div>
+          )}
         </div>
       )}
 

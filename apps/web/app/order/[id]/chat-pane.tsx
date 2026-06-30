@@ -342,14 +342,17 @@ export function ChatPane({ orderId, initialEvents, orderState }: ChatPaneProps) 
           }
           // Flush any pending delta before rendering a discrete event
           if (deltaBuffer.current) flushDelta()
-          // Refresh the canvas ONCE per distinct state-change event. Refreshing on
-          // every duplicate event re-mounts <model-viewer> and restarts its GLB
-          // load, so the 3D figure never finishes rendering.
-          if (['images_ready', 'concept_approved', 'preview', 'manufacturable', 'quote', 'paid', 'checkout_approved'].includes(evt.event)
-              && !refreshedStates.current.has(evt.event)) {
-            refreshedStates.current.add(evt.event)
-            refreshedStates.current.delete('__stream_done__')
-            router.refresh()
+          // Refresh the canvas once per distinct state-change EVENT INSTANCE.
+          // Dedup by event id (not type) so repeated events of the same type —
+          // e.g. a second images_ready from a revision — still refresh, while SSE
+          // replays of the same event (same id) don't re-mount the 3D viewer.
+          if (['images_ready', 'concept_approved', 'preview', 'manufacturable', 'quote', 'paid', 'checkout_approved'].includes(evt.event)) {
+            const key = `refresh:${evt.event}:${evt.id ?? evt.created_at ?? 0}`
+            if (!refreshedStates.current.has(key)) {
+              refreshedStates.current.add(key)
+              refreshedStates.current.delete('__stream_done__')
+              router.refresh()
+            }
           }
           const bubble = eventToBubble(evt)
           if (bubble) appendBubble(bubble)

@@ -87,6 +87,12 @@ export default function OrderPage({ params, searchParams }: PageProps) {
     try { conceptImages = JSON.parse(conceptEvent.data).images || [] } catch { /* */ }
   }
 
+  // A revision is regenerating if the latest revision_requested is newer than the
+  // latest images_ready — used to show a "revising…" loader over the gallery.
+  const lastReqRow = db.prepare("SELECT MAX(created_at) AS t FROM events WHERE order_id=? AND event='revision_requested'").get(params.id) as { t: number | null } | undefined
+  const lastImgRow = db.prepare("SELECT MAX(created_at) AS t FROM events WHERE order_id=? AND event='images_ready'").get(params.id) as { t: number | null } | undefined
+  const revisionInProgress = !!(lastReqRow?.t && (!lastImgRow?.t || lastReqRow.t > lastImgRow.t))
+
   let dfmReport: Record<string, unknown> | undefined
   if (spec?.dfm_report) {
     try { dfmReport = typeof spec.dfm_report === 'string' ? JSON.parse(spec.dfm_report) : spec.dfm_report as Record<string, unknown> } catch { /* */ }
@@ -173,6 +179,7 @@ export default function OrderPage({ params, searchParams }: PageProps) {
       spendCapCents={parseInt(process.env.SPEND_CAP_CENTS || '5000')}
       shipToCaptured={shipToCaptured}
       shipToAddress={shipToAddress}
+      revisionInProgress={revisionInProgress}
     />
   )
 
