@@ -5,7 +5,7 @@ import { ConceptGallery } from './concept-gallery'
 import { ModelViewerSection } from './model-viewer-section'
 import { MoneyCard } from './money-card'
 import { PayButton } from './pay-button'
-import { VendorApprovalPanel } from './vendor-approval'
+import { AutoCheckout } from './auto-checkout'
 
 interface Spec {
   dfm_report?: Record<string, unknown>
@@ -31,6 +31,7 @@ interface CanvasPaneProps {
   ledger?: Ledger
   conceptImages: Array<{ id: string; url: string }>
   dfmReport?: Record<string, unknown>
+  dfmExplanation?: string
   glbUrl?: string
   spendCapCents: number
   shipToCaptured?: boolean
@@ -45,18 +46,22 @@ export function CanvasPane({
   ledger,
   conceptImages,
   dfmReport,
+  dfmExplanation,
   glbUrl,
-  spendCapCents,
   shipToCaptured,
   shipToAddress,
 }: CanvasPaneProps) {
-  const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(orderState)
+  const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved', 'approving_checkout'].includes(orderState)
   const showConceptGallery = (orderState === 'concept' || orderState === 'geometry_pending') && conceptImages.length > 0
-  const showMoneyCard = ledger && ['quote', 'paid', 'checkout_pending_approval', 'checkout_approved'].includes(orderState)
-  // Flow: quote → enter address → Pay → paid → governed vendor gate → done.
+  const showMoneyCard = ledger && ['quote', 'paid', 'checkout_pending_approval', 'checkout_approved', 'approving_checkout'].includes(orderState)
+  // Flow: quote → enter address → Pay → paid → (auto) vendor checkout → done.
   const showAddressForm = orderState === 'quote' && ledger && !shipToCaptured
   const showPayButton = orderState === 'quote' && ledger && shipToCaptured
-  const showVendorApproval = orderState === 'paid' && ledger
+  // After payment, paying the vendor is automatic (no human approval in UI).
+  const showAutoCheckout = ['paid', 'checkout_pending_approval', 'approving_checkout'].includes(orderState)
+  // Loader while Run 1 (analyze/concept) is working and the canvas is otherwise empty.
+  const showAnalyzing = ['intake', 'research_done'].includes(orderState)
+  const showBuilding = ['geometry_pending', 'concept_approved'].includes(orderState)
 
   return (
     <div className="p-4 md:p-6">
@@ -81,11 +86,19 @@ export function CanvasPane({
         </div>
       )}
 
-      {/* Geometry Pending Loading */}
-      {orderState === 'geometry_pending' && (
+      {/* Loader — Run 1 analyzing (no concept yet) */}
+      {showAnalyzing && (
         <div className="mb-6 p-6 rounded-xl bg-indigo-900/20 border border-indigo-800 text-center">
           <div className="animate-spin w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-sm text-indigo-300">Building 3D model from concept...</p>
+          <p className="text-sm text-indigo-300">Hermes is analyzing your request…</p>
+        </div>
+      )}
+
+      {/* Loader — building the 3D model from the chosen concept */}
+      {showBuilding && (
+        <div className="mb-6 p-6 rounded-xl bg-indigo-900/20 border border-indigo-800 text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full mx-auto mb-3" />
+          <p className="text-sm text-indigo-300">Building 3D model from concept…</p>
         </div>
       )}
 
@@ -118,6 +131,13 @@ export function CanvasPane({
                 DFM {dfmReport.status === 'PASS_AFTER_FIX' ? 'PASS (after auto-fix)' : dfmReport.status as string}
               </p>
               {dfmReport.explanation && <p className="text-gray-300 mt-1 text-xs">{dfmReport.explanation as string}</p>}
+              {dfmExplanation && (
+                <p className="mt-2 text-xs text-gray-300 border-t border-green-800/50 pt-2">
+                  <span className="text-[#76b900] font-semibold">NVIDIA Nemotron</span>
+                  <span className="text-gray-500"> · explained this result</span><br />
+                  {dfmExplanation}
+                </p>
+              )}
               {dfmReport.material_recommendation && (
                 <p className="text-gray-400 mt-1 text-xs">
                   Material recommendation: <span className="text-amber-300 uppercase font-medium">{dfmReport.material_recommendation as string}</span>
@@ -162,22 +182,21 @@ export function CanvasPane({
         </div>
       )}
 
-      {/* Step 3 (paid): Governed vendor checkout — this is where WE pay Slant3D */}
-      {showVendorApproval && ledger && (
-        <div className="mb-6">
-          <VendorApprovalPanel orderId={orderId} currency={ledger.currency} vendorCostCents={ledger.vendor_cost_cents} spendCapCents={spendCapCents} />
-        </div>
+      {/* Step 3 (paid → approving): vendor payment runs automatically after the
+          customer pays — no human approval step shown. */}
+      {showAutoCheckout && (
+        <AutoCheckout orderId={orderId} />
       )}
 
       {/* Step 4 (checkout_approved): Done */}
       {orderState === 'checkout_approved' && (
         <div className="mb-6 p-4 rounded-xl bg-teal-900/30 border border-teal-700">
           <h2 className="text-lg font-semibold text-teal-300 mb-2">
-            <span className="text-teal-400">Order complete</span> — vendor checkout approved
+            <span className="text-teal-400">Order Confirmed</span> - Will be delivered soon
           </h2>
           <p className="text-sm text-gray-300">
-            Payment confirmed and governed vendor checkout approved. In production, Hermaquette
-            would now pay Slant3D to print and ship. <span className="text-gray-400">This is a demo — no real charge, nothing ships.</span>
+            In production, Hermaquette would now pay Slant3D to print and ship.
+            <span className="text-gray-400"> This is a demo, no real charge, nothing ships.</span>
           </p>
         </div>
       )}

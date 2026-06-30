@@ -102,6 +102,16 @@ export default function OrderPage({ params, searchParams }: PageProps) {
   if (shipEvent?.data) { try { shipToAddress = JSON.parse(shipEvent.data) } catch { /* */ } }
   const shipToCaptured = !!shipToAddress
 
+  // NVIDIA Nemotron's customer-facing DFM explanation lives in the dfm_pass event.
+  const dfmEvent = db.prepare(`
+    SELECT data FROM events WHERE order_id=? AND event IN ('dfm_pass','dfm_pass_after_fix')
+    ORDER BY created_at DESC LIMIT 1
+  `).get(params.id) as { data: string } | undefined
+  let dfmExplanation: string | undefined
+  if (dfmEvent?.data) {
+    try { const e = JSON.parse(dfmEvent.data).dfm_explanation; if (e) dfmExplanation = String(e) } catch { /* */ }
+  }
+
   const badge = getStateBadge(order.state)
   const showViewer = ['preview', 'manufacturable', 'quote', 'paid', 'checkout_pending_approval', 'checkout_approved', 'geometry_pending'].includes(order.state)
   const showConceptGallery = (order.state === 'concept' || order.state === 'geometry_pending') && conceptImages.length > 0
@@ -158,6 +168,7 @@ export default function OrderPage({ params, searchParams }: PageProps) {
       ledger={ledger}
       conceptImages={conceptImages}
       dfmReport={dfmReport}
+      dfmExplanation={dfmExplanation}
       glbUrl={glbUrl}
       spendCapCents={parseInt(process.env.SPEND_CAP_CENTS || '5000')}
       shipToCaptured={shipToCaptured}

@@ -127,27 +127,33 @@ try {
   process.exit(1)
 }
 
-// Optionally call Nemotron for a customer-facing DFM explanation
+// Call NVIDIA Nemotron directly for a customer-facing DFM explanation.
+// (The local Hermes Nemotron gateway on :8643 isn't started, so hit the NVIDIA
+// API directly with NEMOTRON_API_KEY against integrate.api.nvidia.com.)
 let dfmExplanation = null
 if (process.env.NEMOTRON_API_KEY) {
   try {
-    const nemotronResp = await fetch('http://127.0.0.1:8643/v1/chat/completions', {
+    const base = (process.env.NEMOTRON_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/$/, '')
+    const nemotronResp = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HERMES_API_KEY || 'hermaquette-local'}`,
+        Authorization: `Bearer ${process.env.NEMOTRON_API_KEY}`,
       },
       body: JSON.stringify({
-        model: process.env.NEMOTRON_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct',
-        messages: [{ role: 'user', content: `Explain this DFM result in 2 sentences for a customer: ${JSON.stringify(result.mesh_checks)}` }],
+        model: process.env.NEMOTRON_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b',
+        messages: [{ role: 'user', content: `In 2 short, friendly sentences, reassure a customer that their 3D-printed figurine passed manufacturability (DFM) checks and is ready to print. Be specific but non-technical. Checks: ${JSON.stringify(result.mesh_checks)}` }],
+        max_tokens: 160,
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(20_000),
     })
     if (nemotronResp.ok) {
       const nem = await nemotronResp.json()
-      dfmExplanation = nem.choices?.[0]?.message?.content
+      dfmExplanation = nem.choices?.[0]?.message?.content?.trim() || null
+    } else {
+      console.warn('[dfm-repair] Nemotron HTTP', nemotronResp.status)
     }
-  } catch (err) { /* explanation optional */ }
+  } catch (err) { console.warn('[dfm-repair] Nemotron call failed:', err.message) }
 }
 
 // Persist result based on DFM status

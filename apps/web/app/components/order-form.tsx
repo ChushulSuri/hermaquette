@@ -199,13 +199,6 @@ export function OrderForm() {
         </div>
       </div>
 
-      {/* Disclaimer */}
-      <div className="rounded-lg px-4 py-3 text-xs leading-relaxed"
-        style={{ background: '#111118', border: '1px solid #1e1e2e', color: '#5a5a72' }}>
-        One-off personal gift &nbsp;·&nbsp; Not for resale &nbsp;·&nbsp; No affiliation or endorsement claimed
-        &nbsp;·&nbsp; Stripe TEST MODE — no real charges will be made
-      </div>
-
       {/* Error */}
       {error && (
         <div className="rounded-lg px-4 py-3 text-sm"
